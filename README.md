@@ -10,7 +10,7 @@ npm run build
 npm start
 ```
 
-Open `http://localhost:3001`. NIIT University is the first configured campus; only `@niituniversity.in` addresses can verify. Copy `.env.example` to `.env` before production use. The one-time code is returned only in development and logged by the server.
+For this workspace, open `http://localhost:3002`. Port 3001 was already occupied when the local server was started. To run it yourself, use `PORT=3002 npm start` (or choose any free port). NIIT University is the first configured campus; only `@niituniversity.in` addresses can verify. Copy `.env.example` to `.env` before production use. The one-time code is returned only in development and logged by the server.
 
 ## Implemented backend
 
