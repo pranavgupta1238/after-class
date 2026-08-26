@@ -9,7 +9,9 @@ Last reviewed: 2026-08-26. Pricing and free-tier limits change; re-check them be
 - [x] Add Docker, Docker Compose, Railway/Vercel manifests, environment template, and CI build check.
 - [x] Create a repository-scoped GitHub deploy key; private half remains local and ignored.
 
-## Stage 2 — external deployment setup
+## Stage 2 — external deployment setup (deferred)
+
+> Deferred by founder decision on 2026-08-26. Complete this section before any public NIIT University launch; development continues locally on Stage 3.
 
 - [ ] Create a Supabase project for Afterclass.
   - [ ] Record project URL in private notes.
