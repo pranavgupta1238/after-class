@@ -1,0 +1,313 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CampusStatus {
+  active
+  paused
+  retired
+}
+
+enum AccountStatus {
+  active
+  muted
+  suspended
+  banned
+}
+
+enum Gender {
+  woman
+  man
+  nonbinary
+  self_described
+  prefer_not_to_say
+}
+
+enum Orientation {
+  straight
+  gay
+  lesbian
+  bisexual
+  pansexual
+  queer
+  questioning
+  asexual
+  prefer_not_to_say
+}
+
+enum AliasRotationReason {
+  initial
+  scheduled
+  outing_completed
+  moderation
+}
+
+enum RoomKind {
+  campus
+  match
+}
+
+enum MatchRequestStatus {
+  open
+  pending_acceptance
+  matched
+  completed
+  expired
+  cancelled
+}
+
+enum ApplicationStatus {
+  pending
+  accepted
+  waiting
+  withdrawn
+  expired
+}
+
+enum MatchStatus {
+  active
+  completed
+  cancelled
+}
+
+enum RevealStatus {
+  pending
+  accepted
+  declined
+}
+
+enum ReportReason {
+  harassment
+  inappropriate_content
+  spam
+  threats
+  impersonation
+  other
+}
+
+enum ReportStatus {
+  pending
+  reviewing
+  resolved
+  dismissed
+}
+
+enum ModerationActionType {
+  warning
+  mute
+  suspension
+  ban
+}
+
+model Campus {
+  id          String       @id @default(uuid()) @db.Uuid
+  slug        String       @unique
+  name        String
+  emailDomain String       @unique @map("email_domain")
+  location    String?
+  status      CampusStatus @default(active)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  users       User[]
+  rooms       ChatRoom[]
+  requests    MatchRequest[]
+  reports     Report[]
+  actions     ModerationAction[]
+
+  @@map("campuses")
+}
+
+model User {
+  id             String        @id @default(uuid()) @db.Uuid
+  campusId       String        @map("campus_id") @db.Uuid
+  email          String        @unique
+  publicAlias    String        @map("public_alias")
+  revealName     String?       @map("reveal_name")
+  gender         Gender        @default(prefer_not_to_say)
+  orientation    Orientation   @default(prefer_not_to_say)
+  genderPreference String      @default("any") @map("gender_preference")
+  reputationScore Int          @default(100) @map("reputation_score")
+  noShowCount    Int           @default(0) @map("no_show_count")
+  accountStatus  AccountStatus @default(active) @map("account_status")
+  suspendedUntil DateTime?     @map("suspended_until") @db.Timestamptz(6)
+  sessionVersion Int           @default(0) @map("session_version")
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastActiveAt   DateTime      @default(now()) @map("last_active_at") @db.Timestamptz(6)
+  campus         Campus        @relation(fields: [campusId], references: [id], onDelete: Restrict)
+  aliases        AliasHistory[]
+  sentMessages   Message[]
+  createdRequests MatchRequest[] @relation("requester")
+  applications   MatchApplication[]
+  firstMatches   Match[]       @relation("match_user_one")
+  secondMatches  Match[]       @relation("match_user_two")
+  revealConsents RevealConsent[]
+  reportsFiled   Report[]      @relation("reporter")
+  reportsReceived Report[]     @relation("reported_user")
+  moderationActions ModerationAction[] @relation("action_target")
+  administeredActions ModerationAction[] @relation("action_admin")
+
+  @@unique([campusId, publicAlias])
+  @@index([campusId, accountStatus])
+  @@map("users")
+}
+
+model AliasHistory {
+  id             String              @id @default(uuid()) @db.Uuid
+  userId         String              @map("user_id") @db.Uuid
+  alias          String
+  rotationReason AliasRotationReason @map("rotation_reason")
+  startedAt      DateTime            @default(now()) @map("started_at") @db.Timestamptz(6)
+  endedAt        DateTime?           @map("ended_at") @db.Timestamptz(6)
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startedAt])
+  @@map("alias_history")
+}
+
+model ChatRoom {
+  id        String   @id @default(uuid()) @db.Uuid
+  campusId  String   @map("campus_id") @db.Uuid
+  kind      RoomKind
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  campus    Campus   @relation(fields: [campusId], references: [id], onDelete: Restrict)
+  messages  Message[]
+  match     Match?
+
+  @@index([campusId, kind])
+  @@map("chat_rooms")
+}
+
+model Message {
+  id          String    @id @default(uuid()) @db.Uuid
+  roomId      String    @map("room_id") @db.Uuid
+  senderId    String    @map("sender_id") @db.Uuid
+  senderAlias String    @map("sender_alias")
+  content     String    @db.VarChar(500)
+  isFiltered  Boolean   @default(false) @map("is_filtered")
+  isDeleted   Boolean   @default(false) @map("is_deleted")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+  room        ChatRoom  @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  sender      User      @relation(fields: [senderId], references: [id], onDelete: Restrict)
+  reports     Report[]
+
+  @@index([roomId, createdAt])
+  @@index([senderId, createdAt])
+  @@map("messages")
+}
+
+model MatchRequest {
+  id                    String             @id @default(uuid()) @db.Uuid
+  campusId              String             @map("campus_id") @db.Uuid
+  requesterId           String             @map("requester_id") @db.Uuid
+  activity              String             @db.VarChar(100)
+  location              String             @db.VarChar(120)
+  scheduledAt           DateTime           @map("scheduled_at") @db.Timestamptz(6)
+  genderPreference      String             @default("any") @map("gender_preference")
+  orientationPreference String             @default("any") @map("orientation_preference")
+  status                MatchRequestStatus @default(open)
+  expiresAt             DateTime           @map("expires_at") @db.Timestamptz(6)
+  createdAt             DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  cancelledAt           DateTime?          @map("cancelled_at") @db.Timestamptz(6)
+  campus                Campus             @relation(fields: [campusId], references: [id], onDelete: Restrict)
+  requester             User               @relation("requester", fields: [requesterId], references: [id], onDelete: Restrict)
+  applications          MatchApplication[]
+  match                 Match?
+
+  @@index([campusId, status, expiresAt])
+  @@index([requesterId, status])
+  @@map("match_requests")
+}
+
+model MatchApplication {
+  id          String            @id @default(uuid()) @db.Uuid
+  requestId   String            @map("request_id") @db.Uuid
+  applicantId String            @map("applicant_id") @db.Uuid
+  status      ApplicationStatus @default(pending)
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  request     MatchRequest      @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  applicant   User              @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, applicantId])
+  @@index([applicantId, status])
+  @@map("match_applications")
+}
+
+model Match {
+  id          String      @id @default(uuid()) @db.Uuid
+  requestId   String      @unique @map("request_id") @db.Uuid
+  userOneId   String      @map("user_one_id") @db.Uuid
+  userTwoId   String      @map("user_two_id") @db.Uuid
+  roomId      String      @unique @map("room_id") @db.Uuid
+  status      MatchStatus @default(active)
+  scheduledAt DateTime    @map("scheduled_at") @db.Timestamptz(6)
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt DateTime?   @map("completed_at") @db.Timestamptz(6)
+  request     MatchRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  userOne     User        @relation("match_user_one", fields: [userOneId], references: [id], onDelete: Restrict)
+  userTwo     User        @relation("match_user_two", fields: [userTwoId], references: [id], onDelete: Restrict)
+  room        ChatRoom    @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  revealConsents RevealConsent[]
+
+  @@index([userOneId, status])
+  @@index([userTwoId, status])
+  @@map("matches")
+}
+
+model RevealConsent {
+  id          String       @id @default(uuid()) @db.Uuid
+  matchId     String       @map("match_id") @db.Uuid
+  userId      String       @map("user_id") @db.Uuid
+  status      RevealStatus @default(pending)
+  requestedAt DateTime     @default(now()) @map("requested_at") @db.Timestamptz(6)
+  respondedAt DateTime?    @map("responded_at") @db.Timestamptz(6)
+  match       Match        @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, userId])
+  @@map("reveal_consents")
+}
+
+model Report {
+  id             String       @id @default(uuid()) @db.Uuid
+  campusId       String       @map("campus_id") @db.Uuid
+  reporterId     String       @map("reporter_id") @db.Uuid
+  reportedUserId String       @map("reported_user_id") @db.Uuid
+  messageId      String?      @map("message_id") @db.Uuid
+  reason         ReportReason
+  detail         String?      @db.VarChar(1000)
+  status         ReportStatus @default(pending)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  resolvedAt     DateTime?    @map("resolved_at") @db.Timestamptz(6)
+  campus         Campus       @relation(fields: [campusId], references: [id], onDelete: Restrict)
+  reporter       User         @relation("reporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  reportedUser   User         @relation("reported_user", fields: [reportedUserId], references: [id], onDelete: Restrict)
+  message        Message?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([campusId, status, createdAt])
+  @@index([reportedUserId, createdAt])
+  @@map("reports")
+}
+
+model ModerationAction {
+  id          String               @id @default(uuid()) @db.Uuid
+  campusId    String               @map("campus_id") @db.Uuid
+  userId      String               @map("user_id") @db.Uuid
+  adminUserId String?              @map("admin_user_id") @db.Uuid
+  type        ModerationActionType
+  reason      String               @db.VarChar(1000)
+  startsAt    DateTime             @default(now()) @map("starts_at") @db.Timestamptz(6)
+  endsAt      DateTime?            @map("ends_at") @db.Timestamptz(6)
+  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  campus      Campus               @relation(fields: [campusId], references: [id], onDelete: Restrict)
+  user        User                 @relation("action_target", fields: [userId], references: [id], onDelete: Restrict)
+  adminUser   User?                @relation("action_admin", fields: [adminUserId], references: [id], onDelete: SetNull)
+
+  @@index([userId, startsAt])
+  @@index([campusId, createdAt])
+  @@map("moderation_actions")
+}
