@@ -1,7 +1,7 @@
 import './style.css';
 import { io } from 'socket.io-client';
 if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
-const API = location.port === '5173' ? 'http://localhost:3001/api' : '/api';
+const API = import.meta.env.VITE_API_URL || (location.port === '5173' ? 'http://localhost:3002/api' : '/api');
 async function api(path, options={}) { const r=await fetch(API+path,{credentials:'include',headers:{'Content-Type':'application/json',...(options.headers||{})},...options}); const data=await r.json(); if(!r.ok) throw new Error(data.error||'Something went wrong'); return data; }
 
 const state = {

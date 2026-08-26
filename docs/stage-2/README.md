@@ -27,8 +27,8 @@ Local services run with `docker compose up -d`, then:
 ```bash
 npm ci
 npm run build
-npm start
-curl http://localhost:3001/api/health
+PORT=3002 npm start
+curl http://localhost:3002/api/health
 ```
 
 Expected response is `{"ok":true,"service":"afterclass"}`. Once the Supabase adapter is added in Stage 4, this endpoint will additionally report a successful database dependency check. We must not claim that milestone until actual Supabase credentials are connected.

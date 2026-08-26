@@ -15,7 +15,7 @@ For this workspace, open `http://localhost:3002`. Port 3001 was already occupied
 ## Implemented backend
 
 - HTTP-only 30-day JWT sessions and university-domain OTP verification
-- Local persistent store at `server/data.json` (intentionally ignored by Git)
+- Temporary local account/OTP store at `server/data.json` (intentionally ignored by Git); campus chat messages and reports persist in local Postgres via Prisma.
 - Campus and match-room Socket.IO authentication, history, content sanitisation and message throttling
 - Activity requests, applications, accept/match flow, and private rooms
 - Mutual reveal request state, reporting and protected admin reports endpoint
