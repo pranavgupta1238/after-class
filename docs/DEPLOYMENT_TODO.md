@@ -57,6 +57,20 @@ Store these in provider dashboards only—never in Git, issues, chat, screenshot
 - [ ] Only `@niituniversity.in` emails can request an OTP.
 - [ ] Resend delivers an OTP from the verified sender domain.
 
+## Stage 6 — Match requests and private chat (in progress)
+
+- [x] Add Prisma transaction service for match-request creation, anonymous applications, and acceptance.
+- [x] Create a private chat room, match record, and two reveal-consent records atomically on acceptance.
+- [ ] Add authenticated API routes for request creation, discovery, application, acceptance, cancellation, and completion.
+- [ ] Enforce campus, gender, and orientation compatibility server-side without exposing applicant identities.
+- [ ] Build live request discovery/create/application UI.
+- [ ] Build request-owner application queue UI that exposes counts, not applicant aliases.
+- [ ] Add private-room Socket.IO authorization, history, and message persistence.
+- [ ] Build mutual identity-reveal request/accept/decline UI; reveal names only after both consent records are accepted.
+- [ ] Add cancellation, outing-completion, no-show, and reputation workflows.
+- [ ] Add two-user integration tests for the full lifecycle and privacy boundaries.
+- [ ] Commit, push, and manually review the complete Stage 6 flow before moving to Stage 7.
+
 ## Before public student launch
 
 - [ ] Complete the remaining roadmap stages: production database, live chat, matching, alias rotation, moderation, and push notifications.
