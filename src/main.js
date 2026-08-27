@@ -17,7 +17,7 @@ const state = {
     { emoji:'🏸', activity:'Badminton doubles', host:'SunnyClover', place:'Sports Centre · Sunday, 10:00 AM', tags:['Active','Beginner friendly'], interested:6 }
   ]
 };
-let socket, chatInitialized = false;
+let socket, chatInitialized = false, chatLoading = false, chatAccessDenied = false;
 
 const icons = { home:'⌂', chat:'◌', compass:'⌘', inbox:'✦', shield:'♢', settings:'⚙' };
 function avatar(name, small=false){ return `<span class="avatar ${small?'small':''}">${name.slice(0,1)}</span>` }
@@ -39,7 +39,24 @@ window.joinPlan=n=>{state.joined=true;toast(`Interest sent for ${n}`)}; window.c
 window.createPlan=e=>{e.preventDefault(); const n=document.querySelector('#activity').value; closeModal();toast(`${n} is now live for campus`) }; window.sendMessage=e=>{e.preventDefault();const el=document.querySelector('#message'); if(!el.value.trim())return;if(!socket?.connected)return toast('Verify your NIIT email to chat.');socket.emit('campus:message',{content:el.value},r=>{if(r?.error)toast(r.error)});el.value=''};
 window.openAuth=()=>document.body.insertAdjacentHTML('beforeend',modal(`<span class="eyebrow">VERIFIED STUDENTS ONLY</span><h2>Use your NIIT University email.</h2><p>We never show it to other students.</p><form id="otp-form" onsubmit="sendOtp(event)"><label>Email<input id="auth-email" type="email" placeholder="you@niituniversity.in" required></label><button class="primary wide">Send verification code →</button></form></div>`));
 window.sendOtp=async e=>{e.preventDefault();try{const email=document.querySelector('#auth-email').value;const r=await api('/auth/send-otp',{method:'POST',body:JSON.stringify({email})});document.querySelector('#otp-form').innerHTML=`<label>Six-digit code<input id="auth-code" inputmode="numeric" required></label>${r.developmentCode?`<p class="dev-code">Development code: <b>${r.developmentCode}</b></p>`:''}<button class="primary wide">Verify and join →</button>`;document.querySelector('#otp-form').onsubmit=ev=>verifyOtp(ev,email)}catch(err){toast(err.message)}};
-window.verifyOtp=async(e,email)=>{e.preventDefault();try{const r=await api('/auth/verify-otp',{method:'POST',body:JSON.stringify({email,code:document.querySelector('#auth-code').value})});closeModal();toast(`Welcome, ${r.user.username}`)}catch(err){toast(err.message)}};
+window.verifyOtp=async(e,email)=>{e.preventDefault();try{const r=await api('/auth/verify-otp',{method:'POST',body:JSON.stringify({email,code:document.querySelector('#auth-code').value})});chatAccessDenied=false;closeModal();toast(`Welcome, ${r.user.username}`);if(state.view==='chat')loadLiveChat()}catch(err){toast(err.message)}};
 window.reportMessage=async(messageId)=>{if(!messageId)return toast('Reports are available for live messages.');try{await api('/reports',{method:'POST',body:JSON.stringify({messageId,reason:'inappropriate_content'})});toast('Report submitted privately.')}catch(err){toast(err.message)}};
-async function loadLiveChat(){if(chatInitialized)return;try{const me=await api('/me');const history=await api('/messages');state.messages=history.messages;chatInitialized=true;render();socket=io(location.origin,{withCredentials:true});socket.on('connect',()=>socket.emit('room:join',`campus:${me.user.campusId}`));socket.on('message:new',message=>{state.messages.push(message);state.messages=state.messages.slice(-50);if(state.view==='chat')render()});socket.on('connect_error',()=>toast('Chat connection needs a verified session.'))}catch{toast('Verify your NIIT email to join the live chat.')}}
+async function loadLiveChat(){
+  if(chatInitialized||chatLoading||chatAccessDenied)return;
+  chatLoading=true;
+  try{
+    const me=await api('/me');
+    const history=await api('/messages');
+    state.messages=history.messages;
+    chatInitialized=true;
+    if(state.view==='chat')render();
+    socket=io(location.origin,{withCredentials:true});
+    socket.on('connect',()=>socket.emit('room:join',`campus:${me.user.campusId}`));
+    socket.on('message:new',message=>{state.messages.push(message);state.messages=state.messages.slice(-50);if(state.view==='chat')render()});
+    socket.on('connect_error',()=>toast('Chat connection needs a verified session.'));
+  }catch(err){
+    chatAccessDenied=true;
+    toast(err.message==='Authentication required'?'Verify your NIIT email to join the live chat.':err.message);
+  }finally{chatLoading=false}
+}
 function render(){document.querySelector('#app').innerHTML=({home,discover,chat,inbox,safety}[state.view]||home)()}; render();
