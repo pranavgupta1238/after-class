@@ -4,7 +4,7 @@ This deployment uses an Ubuntu VM, PM2, and Nginx. The Node process listens only
 
 ## Prepare the VM
 
-Install Node.js 20, Git, Nginx, and PM2. Clone the GitHub repository, then create a private `.env` file from `.env.example`. Set `DATABASE_URL` to the Supabase pooled connection URL, `REDIS_URL` to the Upstash `rediss://` URL, Resend credentials, and long unique values for `JWT_SECRET`, `ADMIN_KEY`, and `HEALTH_SECRET`.
+Install Node.js 20, Git, Nginx, and PM2. Clone the GitHub repository, then create a private `.env` file from `.env.example`. Set `DATABASE_URL` to the Supabase Transaction Pooler URL (port 6543 with `pgbouncer=true`) and `DIRECT_URL` to the Session Pooler URL (port 5432), then set `REDIS_URL` to the Upstash `rediss://` URL, Resend credentials, and long unique values for `JWT_SECRET`, `ADMIN_KEY`, and `HEALTH_SECRET`.
 
 Run the database migration before starting the API:
 
