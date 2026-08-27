@@ -3,6 +3,7 @@
 An anonymous university social network with campus chat, small activity plans, mutual identity consent, reporting, moderation controls, and PWA support.
 
 See [the canonical tech-stack reference](docs/TECH_STACK.md) for the agreed architecture and hosting services.
+See [the Upstash setup guide](docs/UPSTASH_SETUP.md) when you are ready to enable managed Redis.
 
 ## Run locally
 
