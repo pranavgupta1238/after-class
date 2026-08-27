@@ -6,7 +6,7 @@ Last reviewed: 2026-08-26. Pricing and free-tier limits change; re-check them be
 
 - [x] Create local project repository and push `main` to GitHub.
 - [x] Configure first campus: NIIT University (`@niituniversity.in`).
-- [x] Add Docker, Docker Compose, Railway/Vercel manifests, environment template, and CI build check.
+- [x] Add Docker, Docker Compose, Vercel manifests, Oracle/PM2 deployment configuration, environment template, and CI build check.
 - [x] Create a repository-scoped GitHub deploy key; private half remains local and ignored.
 
 ## Stage 2 — external deployment setup (deferred)
@@ -15,21 +15,20 @@ Last reviewed: 2026-08-26. Pricing and free-tier limits change; re-check them be
 
 - [ ] Create a Supabase project for Afterclass.
   - [ ] Record project URL in private notes.
-  - [ ] Copy the pooled Postgres URL into Railway as `DATABASE_URL`.
+  - [ ] Copy the pooled Postgres URL into the Oracle VM `.env` as `DATABASE_URL`.
   - [ ] Choose the correct region before production use.
   - Free tier currently includes 500 MB database, but projects pause after one week of inactivity.
-- [ ] Create a Railway project from the GitHub repository.
-  - [ ] Deploy the API using `railway.toml` / `Dockerfile`.
-  - [ ] Provision a Redis service.
-  - [ ] Set a public API domain.
-  - Free access is limited: the current plan has a trial credit and then a small monthly charge; do not assume it remains free.
+- [ ] Provision an Oracle Cloud Always Free Ubuntu VM and deploy the API with PM2 and Nginx.
+  - [ ] Follow `docs/ORACLE_DEPLOYMENT.md`.
+  - [ ] Set a public API domain and HTTPS certificate.
+- [ ] Create an Upstash Redis database and add its `rediss://` URL as `REDIS_URL` on the VM.
 - [ ] Create a Vercel project from the GitHub repository.
   - [ ] Deploy the Vite frontend using `vercel.json`.
-  - [ ] Record the Vercel URL and set it as Railway `CLIENT_URL`.
+  - [ ] Record the Vercel URL and set it as the VM `CLIENT_URL`.
   - The Hobby tier is currently free for an early/personal project; confirm its current terms before public use.
 - [ ] Create a Resend account.
   - [ ] Verify a sending domain owned or authorized by the project.
-  - [ ] Create a restricted API key and add it only to Railway as `RESEND_API_KEY`.
+  - [ ] Create a restricted API key and add it only to the VM as `RESEND_API_KEY`.
   - Free tier currently permits 3,000 emails/month and 100/day; sufficient for a small pilot only.
 - [ ] Decide and purchase/configure the public domain, if needed.
   - [ ] Point frontend domain to Vercel.
@@ -43,14 +42,16 @@ Store these in provider dashboards only—never in Git, issues, chat, screenshot
 - [ ] `JWT_SECRET`: unique, high-entropy value.
 - [ ] `ADMIN_KEY`: separate high-entropy value.
 - [ ] `DATABASE_URL`: Supabase pooled Postgres connection string.
-- [ ] `REDIS_URL`: Railway Redis connection string.
+- [ ] `REDIS_URL`: Upstash Redis TLS connection string.
 - [ ] `RESEND_API_KEY`: restricted Resend API key.
+- [ ] `RESEND_FROM`: verified Resend sender address.
+- [ ] `HEALTH_SECRET`: secret for the protected Supabase keep-alive endpoint.
 - [ ] `CLIENT_URL`: exact production frontend URL.
 - [ ] `NODE_ENV=production`.
 
 ## Deployment acceptance test
 
-- [ ] GitHub push triggers Vercel and Railway deployments.
+- [ ] GitHub push is pulled and deployed on the Oracle VM using PM2.
 - [ ] Public frontend calls public API health endpoint successfully.
 - [ ] API connects to Postgres and Redis successfully after Stage 4 adapters are implemented.
 - [ ] Session cookies work over HTTPS and cross-origin requests obey the final CORS policy.

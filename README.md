@@ -24,3 +24,7 @@ For this workspace, open `http://localhost:3002`. Port 3001 was already occupied
 ## Production adapters to complete before launch
 
 The application is runnable locally, but live deployment must swap the local store/OTP development transport for Postgres/Prisma, Redis (for distributed limits and job queues), and Resend. Set a high-entropy `JWT_SECRET`, `ADMIN_KEY`, HTTPS, `secure` cookies, a real permitted university domain, and add a proper audited admin authentication flow. Do not operate the supplied fallback data store for a public campus launch.
+
+## Upstash Redis
+
+Rate limits use Redis whenever `REDIS_URL` is set, with a local in-memory fallback for development. Create an Upstash Redis database and set `REDIS_URL` to its TLS connection string (`rediss://…`) in the backend host's environment. Do not expose this value to the browser. The health endpoint (`/api/health`) reports whether Redis is connected.
