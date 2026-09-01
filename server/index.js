@@ -47,11 +47,14 @@ async function generateUsername() {
 // Returns the safe public representation of a Prisma user.
 // Expects user to be loaded with include: { campus: true }.
 function publicUser(u) {
+  if (!u) return null;
   return {
+    id: u.id,
     username: u.publicAlias,
     university: u.campus?.name || 'Unknown',
     campusId: u.campus?.slug || u.campusId,
     reputation: u.reputationScore,
+    avatarConfig: u.avatarConfig || null,
     createdAt: u.createdAt
   };
 }
@@ -193,6 +196,23 @@ app.post('/api/auth/logout', auth, async (req, res) => {
 
 app.get('/api/me', auth, (req, res) => res.json({ user: publicUser(req.user) }));
 
+app.patch('/api/users/avatar', auth, async (req, res) => {
+  try {
+    const { avatarConfig } = req.body;
+    if (!avatarConfig || typeof avatarConfig !== 'object') {
+      return res.status(400).json({ error: 'Invalid avatar configuration.' });
+    }
+    const updated = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { avatarConfig },
+      include: { campus: true }
+    });
+    res.json({ user: publicUser(updated) });
+  } catch {
+    res.status(500).json({ error: 'Could not save avatar.' });
+  }
+});
+
 // ── Campus chat history ─────────────────────────────────────────────────────
 
 app.get('/api/messages', auth, async (req, res) => {
@@ -209,10 +229,10 @@ app.get('/api/match-requests', auth, async (req, res) => {
   try {
     const requests = await prisma.matchRequest.findMany({
       where: { campusId: req.user.campusId, status: 'open', expiresAt: { gt: new Date() } },
-      include: { requester: true },
+      include: { requester: true, applications: { where: { applicantId: req.user.id } } },
       orderBy: { createdAt: 'desc' }
     });
-    res.json({ requests: requests.map(matchService.publicRequest) });
+    res.json({ requests: requests.map(r => matchService.publicRequest(r, req.user.id)) });
   } catch { res.status(503).json({ error: 'Matching is unavailable.' }); }
 });
 
@@ -232,6 +252,29 @@ app.post('/api/match-requests', auth, async (req, res) => {
   } catch { res.status(400).json({ error: 'Unable to create request.' }); }
 });
 
+// Fetch all plans created by current user
+app.get('/api/match-requests/mine', auth, async (req, res) => {
+  try {
+    const plans = await prisma.matchRequest.findMany({
+      where: { requesterId: req.user.id },
+      include: { applications: { where: { status: 'pending' } } },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json({
+      plans: plans.map(p => ({
+        id: p.id,
+        activity: p.activity,
+        location: p.location,
+        scheduledAt: p.scheduledAt,
+        status: p.status,
+        expiresAt: p.expiresAt,
+        createdAt: p.createdAt,
+        pendingApplicantsCount: p.applications.length
+      }))
+    });
+  } catch { res.status(503).json({ error: 'Could not load your plans.' }); }
+});
+
 // Must be declared before /api/match-requests/:id to avoid route collision
 app.get('/api/match-requests/mine/applications', auth, async (req, res) => {
   try {
@@ -241,6 +284,20 @@ app.get('/api/match-requests/mine/applications', auth, async (req, res) => {
     });
     res.json({ applications: applications.map(a => ({ id: a.id, requestId: a.requestId, activity: a.request.activity, interestCount: 1 })) });
   } catch { res.status(503).json({ error: 'Applications unavailable.' }); }
+});
+
+app.delete('/api/match-requests/:id', auth, async (req, res) => {
+  try {
+    const plan = await prisma.matchRequest.findFirst({
+      where: { id: req.params.id, requesterId: req.user.id }
+    });
+    if (!plan) return res.status(404).json({ error: 'Plan not found.' });
+    await prisma.matchRequest.update({
+      where: { id: plan.id },
+      data: { status: 'cancelled', cancelledAt: new Date() }
+    });
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: 'Could not close plan.' }); }
 });
 
 app.post('/api/match-requests/:id/applications', auth, async (req, res) => {
@@ -401,6 +458,28 @@ io.on('connection', socket => {
     }
   });
 
+  // Mark messages as read in a room
+  socket.on('room:read', async ({ roomId }) => {
+    if (!roomId) return;
+    const match = await prisma.match.findFirst({
+      where: { roomId, OR: [{ userOneId: user.id }, { userTwoId: user.id }], status: MatchStatus.active }
+    });
+    if (match) {
+      socket.to(roomId).emit('room:read', { roomId, readerId: user.id });
+    }
+  });
+
+  // Typing indicators
+  socket.on('typing:start', ({ roomId }) => {
+    const targetRoom = roomId || ('campus:' + user.campus.slug);
+    socket.to(targetRoom).emit('typing:start', { roomId: targetRoom, username: user.publicAlias, userId: user.id });
+  });
+
+  socket.on('typing:stop', ({ roomId }) => {
+    const targetRoom = roomId || ('campus:' + user.campus.slug);
+    socket.to(targetRoom).emit('typing:stop', { roomId: targetRoom, userId: user.id });
+  });
+
   // Campus-wide broadcast message (persisted to Prisma)
   socket.on('campus:message', async ({ content }, ack = () => {}) => {
     if (!await redis.limit('chat:' + user.id, 20, 60000)) return ack({ error: 'Slow down — 20 messages per minute.' });
@@ -409,7 +488,7 @@ io.on('connection', socket => {
       const room = await campusRoom(user);
       const cleaned = clean(content);
       const message = await prisma.message.create({ data: { roomId: room.id, senderId: user.id, senderAlias: user.publicAlias, content: cleaned, isFiltered: cleaned !== content.trim() } });
-      const payload = publicMessage(message);
+      const payload = { ...publicMessage(message), status: 'delivered' };
       io.to('campus:' + user.campus.slug).emit('message:new', payload);
       ack({ ok: true, message: payload });
     } catch { ack({ error: 'Campus chat is unavailable.' }); }
@@ -425,7 +504,12 @@ io.on('connection', socket => {
     if (!match) return ack({ error: 'Room unavailable.' });
     const cleaned = clean(content);
     const message = await prisma.message.create({ data: { roomId, senderId: user.id, senderAlias: user.publicAlias, content: cleaned, isFiltered: cleaned !== content.trim() } });
-    const payload = publicMessage(message);
+    
+    // Check if peer is connected in the room
+    const roomSockets = io.sockets.adapter.rooms.get(roomId);
+    const peerOnline = roomSockets && roomSockets.size > 1;
+    const payload = { ...publicMessage(message), status: peerOnline ? 'delivered' : 'sent' };
+    
     io.to(roomId).emit('message:new', payload);
     ack({ ok: true, message: payload });
   });

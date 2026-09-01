@@ -1,5 +1,6 @@
 import './style.css';
 import { io } from 'socket.io-client';
+import { renderAvatarSvg, renderFullBodyAvatarSvg, renderVerifiedBadgeSvg, AVATAR_OPTIONS, getDeterministicAvatar } from './avatar.js';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
@@ -32,11 +33,37 @@ const state = {
 
 let socket, chatInitialized = false, chatLoading = false, chatAuthToastShown = false;
 
-const icons = { home: '⌂', chat: '◌', discover: '⌘', inbox: '✦', safety: '♢', settings: '⚙' };
+const icons = {
+  home: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12L12 3l9 9"/><path d="M9 21V12h6v9"/><path d="M5 10v11h14V10"/></svg>`,
+  chat: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="4.5 4.5"><circle cx="12" cy="12" r="9.5"/></svg>`,
+  discover: '⌘',
+  inbox: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>`,
+  safety: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+  settings: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83-2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`
+};
 
-function avatar(name, small = false) {
-  const char = (name || '?').slice(0, 1).toUpperCase();
-  return `<span class="avatar ${small ? 'small' : ''}">${char}</span>`;
+function avatar(nameOrConfig, small = false, isVerified = true) {
+  const size = small ? 22 : 36;
+  const badgeSize = small ? 10 : 15;
+  let svgContent;
+  if (!nameOrConfig) svgContent = renderAvatarSvg('Anonymous', size);
+  else if (typeof nameOrConfig === 'object') svgContent = renderAvatarSvg(nameOrConfig, size);
+  else if (state.me && nameOrConfig === state.me.username && state.me.avatarConfig) {
+    svgContent = renderAvatarSvg(state.me.avatarConfig, size);
+  } else {
+    svgContent = renderAvatarSvg(nameOrConfig, size);
+  }
+
+  if (!isVerified) return svgContent;
+
+  return `
+    <span class="avatar-verified-wrapper" style="position:relative;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">
+      ${svgContent}
+      <span class="avatar-verified-badge" style="position:absolute;bottom:-2px;right:-2px;z-index:2;line-height:0;" title="Verified Student">
+        ${renderVerifiedBadgeSvg(badgeSize)}
+      </span>
+    </span>
+  `;
 }
 
 function layout(content) {
@@ -53,7 +80,7 @@ function layout(content) {
   const inboxCount = (state.matches.length + state.pendingApplications.length) || 0;
 
   return `
-    <div class="shell">
+    <div class="shell ${state.view === 'chat' ? 'chat-shell' : ''}">
       <aside>
         <a class="brand" href="#" onclick="go('home')"><i>✦</i> afterclass</a>
         <div class="campus">YOUR CAMPUS <b>${campusName}</b></div>
@@ -65,16 +92,16 @@ function layout(content) {
             </button>
           `).join('')}
         </nav>
-        <div class="sidebar-bottom">
-          ${avatar(username, true)}
+        <div class="sidebar-bottom" onclick="${me ? 'openAvatarPreview()' : 'openAuth()'}" style="cursor:pointer;" title="${me ? 'View your avatar showcase' : ''}">
+          ${avatar(me?.avatarConfig || username, false)}
           <div>
             <strong>${username}</strong>
-            <small>${me ? 'verified student' : 'not signed in'}</small>
+            <small>${me ? 'view character ✦' : 'not signed in'}</small>
           </div>
-          ${me ? `<button class="gear" title="Log out" onclick="logout()">⇥</button>` : `<button class="gear" onclick="openAuth()">⚙</button>`}
+          ${me ? `<button class="gear" title="Log out" onclick="event.stopPropagation(); logout()">⇥</button>` : `<button class="gear" onclick="event.stopPropagation(); openAuth()">⚙</button>`}
         </div>
       </aside>
-      <main>
+      <main class="${state.view === 'chat' ? 'chat-main' : ''}">
         <header>
           <div class="mobile-brand">✦ afterclass</div>
           <div class="online"><span></span> ${campusName}</div>
@@ -144,6 +171,7 @@ function home() {
 
 function card(r) {
   const isMine = state.me && r.host?.username === state.me.username;
+  const hasApplied = Boolean(r.hasApplied);
   const formattedDate = r.scheduledAt ? new Date(r.scheduledAt).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Soon';
   return `
     <article class="plan-card">
@@ -161,7 +189,9 @@ function card(r) {
         <span>${isMine ? 'Your plan' : 'Verified host'}</span>
         ${isMine
           ? `<span class="muted">Hosted by you</span>`
-          : `<button onclick="joinPlan('${r.id}', '${r.activity.replace(/'/g, "\\'")}')">I’m interested</button>`}
+          : (hasApplied
+              ? `<button class="applied-btn" disabled>Interest sent ✓</button>`
+              : `<button onclick="joinPlan('${r.id}', '${r.activity.replace(/'/g, "\\'")}')">I’m interested</button>`)}
       </footer>
     </article>
   `;
@@ -215,7 +245,7 @@ function chat() {
               <div class="message">
                 ${avatar(name)}
                 <div>
-                  <b>${name}</b><small>${time}</small>
+                  <b>${name}</b><small>${time}${isMine ? ' <span class="tick delivered" title="Delivered">✓✓</span>' : ''}</small>
                   <p>${text}</p>
                 </div>
                 ${m.id && !isMine ? `<button class="report" onclick="reportMessage('${m.id}')" title="Report message to moderators">Report</button>` : ''}
@@ -223,8 +253,9 @@ function chat() {
             `;
           }).join('')}
         </div>
+        <div id="campus-typing-indicator" class="typing-indicator"></div>
         <form class="composer" onsubmit="sendMessage(event)">
-          <input id="message" maxlength="500" placeholder="Say something to campus…" autocomplete="off">
+          <input id="message" maxlength="500" placeholder="Say something to campus…" autocomplete="off" oninput="handleTypingInput()" onblur="stopTypingNow()">
           <button type="submit">↑</button>
         </form>
       </div>
@@ -234,55 +265,102 @@ function chat() {
 
 function inbox() {
   setTimeout(loadInbox, 0);
+  const activeTab = state.inboxTab || 'matches';
+  const myPlansCount = state.myPlans?.length || 0;
   return layout(`
     <section class="page-title compact">
-      <span class="eyebrow">YOUR CONNECTIONS</span>
+      <span class="eyebrow">YOUR CONNECTIONS & PLANS</span>
       <h1>Inbox</h1>
-      <p>Private conversations only begin when you both say yes.</p>
+      <p>Manage your 1-on-1 private conversations and active campus plans.</p>
     </section>
 
-    ${state.pendingApplications.length > 0 ? `
-      <section style="margin-top:20px;">
-        <h3 style="font-size:16px; margin-bottom:12px;">Incoming Interest on Your Plans</h3>
-        ${state.pendingApplications.map(a => `
-          <div class="conversation">
-            <div class="conversation-avatar">✦</div>
-            <div>
-              <span class="eyebrow">INTEREST RECEIVED</span>
-              <h3>${a.activity}</h3>
-              <p>A fellow student wants to join your plan.</p>
-            </div>
-            <button class="primary" onclick="acceptApplication('${a.id}')">Accept & Open Chat →</button>
-          </div>
-        `).join('')}
-      </section>
-    ` : ''}
+    <div class="inbox-tabs">
+      <button class="${activeTab === 'matches' ? 'active' : ''}" onclick="setInboxTab('matches')">
+        Active Matches (${state.matches.length})
+      </button>
+      <button class="${activeTab === 'my-plans' ? 'active' : ''}" onclick="setInboxTab('my-plans')">
+        My Posted Plans (${myPlansCount})
+      </button>
+    </div>
 
-    ${state.matches.length > 0 ? `
-      <section style="margin-top:20px;">
-        <h3 style="font-size:16px; margin-bottom:12px;">Active Match Chats</h3>
-        ${state.matches.map(m => `
-          <div class="conversation">
-            <div class="conversation-avatar">☕</div>
-            <div>
-              <span class="eyebrow">${m.status.toUpperCase()}</span>
-              <h3>${m.activity}</h3>
-              <p>${avatar(m.other?.username || 'Student', true)} ${m.other?.username || 'Student'} · ${m.location}</p>
+    ${activeTab === 'matches' ? `
+      ${state.pendingApplications.length > 0 ? `
+        <section style="margin-top:20px;">
+          <h3 style="font-size:16px; margin-bottom:12px;">Incoming Interest on Your Plans</h3>
+          ${state.pendingApplications.map(a => `
+            <div class="conversation">
+              <div class="conversation-avatar">✦</div>
+              <div>
+                <span class="eyebrow">INTEREST RECEIVED</span>
+                <h3>${a.activity}</h3>
+                <p>A fellow student wants to join your plan.</p>
+              </div>
+              <button class="primary" onclick="acceptApplication('${a.id}')">Accept & Open Chat →</button>
             </div>
-            <button onclick="openPrivateChat('${m.id}')">Open chat →</button>
-          </div>
-        `).join('')}
-      </section>
-    ` : ''}
+          `).join('')}
+        </section>
+      ` : ''}
 
-    ${state.matches.length === 0 && state.pendingApplications.length === 0 ? `
-      <div class="empty-inbox">
-        <span>✦</span>
-        <h2>Keep it easy.</h2>
-        <p>When someone accepts your interest or you accept theirs, your private chat will appear here.</p>
-        <button class="primary" onclick="go('discover')">Explore plans</button>
-      </div>
-    ` : ''}
+      ${state.matches.length > 0 ? `
+        <section style="margin-top:20px;">
+          <h3 style="font-size:16px; margin-bottom:12px;">Active Match Chats</h3>
+          ${state.matches.map(m => `
+            <div class="conversation">
+              <div class="conversation-avatar">☕</div>
+              <div>
+                <span class="eyebrow">${m.status.toUpperCase()}</span>
+                <h3>${m.activity}</h3>
+                <p>${avatar(m.other?.username || 'Student', true)} ${m.other?.username || 'Student'} · ${m.location}</p>
+              </div>
+              <button onclick="openPrivateChat('${m.id}')">Open chat →</button>
+            </div>
+          `).join('')}
+        </section>
+      ` : ''}
+
+      ${state.matches.length === 0 && state.pendingApplications.length === 0 ? `
+        <div class="empty-inbox">
+          <span>✦</span>
+          <h2>Keep it easy.</h2>
+          <p>When someone accepts your interest or you accept theirs, your private chat will appear here.</p>
+          <button class="primary" onclick="go('discover')">Explore plans</button>
+        </div>
+      ` : ''}
+    ` : `
+      <section style="margin-top:20px;">
+        ${state.myPlans && state.myPlans.length > 0 ? `
+          <div class="my-plans-grid">
+            ${state.myPlans.map(p => {
+              const isActive = p.status === 'open';
+              const statusLabel = p.status === 'open' ? 'Active' : (p.status === 'matched' ? 'Matched' : 'Closed');
+              const statusClass = p.status === 'open' ? 'active' : (p.status === 'matched' ? 'matched' : 'closed');
+              const dateStr = p.scheduledAt ? new Date(p.scheduledAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+              return `
+                <div class="my-plan-card">
+                  <div class="my-plan-header">
+                    <span class="status-badge ${statusClass}">${statusLabel}</span>
+                    <small>${dateStr}</small>
+                  </div>
+                  <h3>${p.activity}</h3>
+                  <p class="muted">📍 ${p.location}</p>
+                  <div class="my-plan-footer">
+                    <span>👥 ${p.pendingApplicantsCount} applicant${p.pendingApplicantsCount === 1 ? '' : 's'}</span>
+                    ${isActive ? `<button class="close-plan-btn" onclick="closeMyPlan('${p.id}')">Close plan</button>` : ''}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        ` : `
+          <div class="empty-inbox">
+            <span>☕</span>
+            <h2>No posted plans yet.</h2>
+            <p>Have an idea for a study session, coffee meetup, or gym workout?</p>
+            <button class="primary" onclick="openComposer()">＋ Create a plan</button>
+          </div>
+        `}
+      </section>
+    `}
   `);
 }
 
@@ -319,6 +397,244 @@ function safety() {
       <button class="primary" onclick="openGuidelines()">Community Guidelines</button>
     </section>
   `);
+}
+
+let currentDraftAvatar = null;
+let activeAvatarStudioTab = 'appearance';
+let avatarStudioDarkMode = false;
+
+window.openAvatarPreview = () => {
+  if (!state.me) return openAuth();
+  if (!currentDraftAvatar) {
+    currentDraftAvatar = state.me.avatarConfig ? { ...state.me.avatarConfig } : getDeterministicAvatar(state.me.username);
+  }
+  renderAvatarPreviewModal();
+};
+
+window.toggleAvatarStudioDarkMode = () => {
+  avatarStudioDarkMode = !avatarStudioDarkMode;
+  renderAvatarStudioModal();
+};
+
+function renderAvatarPreviewModal() {
+  document.querySelector('.modal-backdrop')?.remove();
+  if (!state.me) return;
+  const cfg = currentDraftAvatar || state.me.avatarConfig || getDeterministicAvatar(state.me.username);
+
+  document.body.insertAdjacentHTML('beforeend', modal(`
+    <div class="avatar-showcase-modal">
+      <span class="eyebrow">STUDENT PROFILE</span>
+      <h2>Your Anonymous Identity</h2>
+
+      <div class="profile-passport-box" style="margin: 20px 0 14px; display: flex; justify-content: center;">
+        <span class="avatar-verified-wrapper" style="position:relative;display:inline-flex;align-items:center;justify-content:center;">
+          ${renderAvatarSvg(cfg, 108)}
+          <span style="position:absolute;bottom:0px;right:0px;z-index:2;line-height:0;" title="Verified Student">
+            ${renderVerifiedBadgeSvg(30)}
+          </span>
+        </span>
+      </div>
+
+      <div class="showcase-user-meta" style="margin-bottom: 20px;">
+        <h3>${state.me.username}</h3>
+        <p><span class="badge-star">✦</span> Verified Student · ${state.me.university || 'Campus'}</p>
+      </div>
+
+      <div class="showcase-actions">
+        <button class="primary wide" onclick="openAvatarStudio()">🎨 Customize Character →</button>
+      </div>
+    </div>
+  `));
+}
+
+window.openAvatarStudio = () => {
+  if (!state.me) return openAuth();
+  if (!currentDraftAvatar) {
+    currentDraftAvatar = state.me.avatarConfig ? { ...state.me.avatarConfig } : getDeterministicAvatar(state.me.username);
+  }
+  activeAvatarStudioTab = 'appearance';
+  renderAvatarStudioModal();
+};
+
+window.setAvatarStudioTab = tab => {
+  activeAvatarStudioTab = tab;
+  renderAvatarStudioModal();
+};
+
+window.updateAvatarDraft = (field, value) => {
+  if (!currentDraftAvatar) return;
+  currentDraftAvatar[field] = value;
+  renderAvatarStudioModal();
+};
+
+window.randomizeAvatarDraft = () => {
+  const skins = AVATAR_OPTIONS.skins.map(s => s.id);
+  const hairs = AVATAR_OPTIONS.hairs.map(h => h.id);
+  const hairColors = AVATAR_OPTIONS.hairColors.map(h => h.id);
+  const outfits = AVATAR_OPTIONS.outfits.map(o => o.id);
+  const outfitColors = AVATAR_OPTIONS.outfitColors.map(o => o.color);
+  const expressions = AVATAR_OPTIONS.expressions.map(e => e.id);
+  const eyewearList = AVATAR_OPTIONS.eyewear.map(e => e.id);
+  const accessories = AVATAR_OPTIONS.accessories.map(a => a.id);
+  const bgs = AVATAR_OPTIONS.bgs.map(b => b.id);
+
+  currentDraftAvatar = {
+    skin: skins[Math.floor(Math.random() * skins.length)],
+    hair: hairs[Math.floor(Math.random() * hairs.length)],
+    hairColor: hairColors[Math.floor(Math.random() * hairColors.length)],
+    outfit: outfits[Math.floor(Math.random() * outfits.length)],
+    outfitColor: outfitColors[Math.floor(Math.random() * outfitColors.length)],
+    expression: expressions[Math.floor(Math.random() * expressions.length)],
+    eyewear: eyewearList[Math.floor(Math.random() * eyewearList.length)],
+    accessory: accessories[Math.floor(Math.random() * accessories.length)],
+    bg: bgs[Math.floor(Math.random() * bgs.length)]
+  };
+  renderAvatarStudioModal();
+};
+
+window.saveAvatar = async () => {
+  if (!currentDraftAvatar) return;
+  try {
+    await api('/users/avatar', {
+      method: 'PATCH',
+      body: JSON.stringify({ avatarConfig: currentDraftAvatar })
+    });
+    if (state.me) state.me.avatarConfig = currentDraftAvatar;
+    closeModal();
+    toast('Avatar updated successfully! ✦');
+    render();
+  } catch (err) {
+    toast(err.message || 'Could not save avatar.');
+  }
+};
+
+function renderAvatarStudioModal() {
+  document.querySelector('.modal-backdrop')?.remove();
+  if (!currentDraftAvatar) return;
+
+  const tab = activeAvatarStudioTab;
+  const isDark = avatarStudioDarkMode;
+
+  document.body.insertAdjacentHTML('beforeend', modal(`
+    <div class="avatar-studio-container">
+      <span class="eyebrow">AVATAR STUDIO</span>
+      <h2>Customize Your Character</h2>
+      
+      <div class="showcase-stage-card ${isDark ? 'dark-stage' : ''}">
+        <div class="stage-controls" style="width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <button class="stage-toggle-btn ${isDark ? 'active' : ''}" onclick="toggleAvatarStudioDarkMode()" title="Switch Light/Dark Spotlight Mode">
+            ${isDark ? '🌙 Dark Stage' : '☀️ Light Studio'}
+          </button>
+          <button class="randomize-btn" style="margin:0;" onclick="randomizeAvatarDraft()" title="Generate random style">🎲 Randomize</button>
+        </div>
+        <div class="fullbody-stage-display">
+          ${renderFullBodyAvatarSvg(currentDraftAvatar, isDark, 200, 260)}
+        </div>
+      </div>
+
+      <div class="studio-tabs">
+        <button class="${tab === 'appearance' ? 'active' : ''}" onclick="setAvatarStudioTab('appearance')">Face & Tone</button>
+        <button class="${tab === 'hair' ? 'active' : ''}" onclick="setAvatarStudioTab('hair')">Hair</button>
+        <button class="${tab === 'outfit' ? 'active' : ''}" onclick="setAvatarStudioTab('outfit')">Clothing</button>
+        <button class="${tab === 'eyewear' ? 'active' : ''}" onclick="setAvatarStudioTab('eyewear')">Eyewear</button>
+        <button class="${tab === 'extras' ? 'active' : ''}" onclick="setAvatarStudioTab('extras')">Extras & Bg</button>
+      </div>
+
+      <div class="studio-tab-content">
+        ${tab === 'appearance' ? `
+          <div class="studio-section">
+            <label>Skin Tone</label>
+            <div class="color-palette-row">
+              ${AVATAR_OPTIONS.skins.map(s => `
+                <button class="color-chip ${currentDraftAvatar.skin === s.id ? 'selected' : ''}" style="background:${s.color};" onclick="updateAvatarDraft('skin', '${s.id}')" title="${s.label}"></button>
+              `).join('')}
+            </div>
+          </div>
+          <div class="studio-section">
+            <label>Expression</label>
+            <div class="chip-options-grid">
+              ${AVATAR_OPTIONS.expressions.map(e => `
+                <button class="studio-chip ${currentDraftAvatar.expression === e.id ? 'selected' : ''}" onclick="updateAvatarDraft('expression', '${e.id}')">${e.label}</button>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        ${tab === 'hair' ? `
+          <div class="studio-section">
+            <label>Hairstyle</label>
+            <div class="chip-options-grid">
+              ${AVATAR_OPTIONS.hairs.map(h => `
+                <button class="studio-chip ${currentDraftAvatar.hair === h.id ? 'selected' : ''}" onclick="updateAvatarDraft('hair', '${h.id}')">${h.label}</button>
+              `).join('')}
+            </div>
+          </div>
+          <div class="studio-section">
+            <label>Hair Color</label>
+            <div class="color-palette-row">
+              ${AVATAR_OPTIONS.hairColors.map(h => `
+                <button class="color-chip ${currentDraftAvatar.hairColor === h.id ? 'selected' : ''}" style="background:${h.color};" onclick="updateAvatarDraft('hairColor', '${h.id}')" title="${h.label}"></button>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        ${tab === 'outfit' ? `
+          <div class="studio-section">
+            <label>Outfit Style (10 College Looks)</label>
+            <div class="chip-options-grid">
+              ${AVATAR_OPTIONS.outfits.map(o => `
+                <button class="studio-chip ${currentDraftAvatar.outfit === o.id ? 'selected' : ''}" onclick="updateAvatarDraft('outfit', '${o.id}')">${o.label}</button>
+              `).join('')}
+            </div>
+          </div>
+          <div class="studio-section">
+            <label>Outfit Color</label>
+            <div class="color-palette-row">
+              ${AVATAR_OPTIONS.outfitColors.map(c => `
+                <button class="color-chip ${currentDraftAvatar.outfitColor === c.color ? 'selected' : ''}" style="background:${c.color};" onclick="updateAvatarDraft('outfitColor', '${c.color}')" title="${c.label}"></button>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        ${tab === 'eyewear' ? `
+          <div class="studio-section">
+            <label>Eyewear & Sunglasses</label>
+            <div class="chip-options-grid">
+              ${AVATAR_OPTIONS.eyewear.map(e => `
+                <button class="studio-chip ${(currentDraftAvatar.eyewear || 'none') === e.id ? 'selected' : ''}" onclick="updateAvatarDraft('eyewear', '${e.id}')">${e.label}</button>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        ${tab === 'extras' ? `
+          <div class="studio-section">
+            <label>Accessories & Details</label>
+            <div class="chip-options-grid">
+              ${AVATAR_OPTIONS.accessories.map(a => `
+                <button class="studio-chip ${currentDraftAvatar.accessory === a.id ? 'selected' : ''}" onclick="updateAvatarDraft('accessory', '${a.id}')">${a.label}</button>
+              `).join('')}
+            </div>
+          </div>
+          <div class="studio-section">
+            <label>Background Badge</label>
+            <div class="color-palette-row">
+              ${AVATAR_OPTIONS.bgs.map(b => `
+                <button class="color-chip ${currentDraftAvatar.bg === b.id ? 'selected' : ''}" style="background:${b.color};" onclick="updateAvatarDraft('bg', '${b.id}')" title="${b.label}"></button>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+      </div>
+
+      <div class="studio-actions">
+        <button class="text-btn" onclick="openAvatarPreview()">← Back</button>
+        <button class="primary" onclick="saveAvatar()">Save Character ✦</button>
+      </div>
+    </div>
+  `));
 }
 
 function modal(content) {
@@ -375,6 +691,7 @@ async function openPrivateChat(matchId) {
 
   if (socket?.connected) {
     socket.emit('room:join', match.roomId);
+    socket.emit('room:read', { roomId: match.roomId });
   }
 
   renderPrivateModal();
@@ -400,18 +717,23 @@ function renderPrivateModal() {
     </div>
     <div class="messages" id="private-messages" style="max-height: 250px; overflow-y: auto; margin: 15px 0;">
       ${state.activeMatchMessages.length === 0 ? `<p class="muted" style="text-align:center;">Say hi and coordinate your plan!</p>` : ''}
-      ${state.activeMatchMessages.map(m => `
-        <div class="message">
-          ${avatar(m.sender?.username || 'Student', true)}
-          <div>
-            <b>${m.sender?.username || 'Student'}</b>
-            <p>${m.content}</p>
+      ${state.activeMatchMessages.map(m => {
+        const isMine = state.me && (m.sender?.username === state.me.username || m.senderId === state.me.id);
+        const time = m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+        return `
+          <div class="message">
+            ${avatar(m.sender?.username || 'Student', true)}
+            <div>
+              <b>${m.sender?.username || 'Student'}</b>${time ? `<small>${time}${isMine ? ' <span class="tick delivered" title="Delivered">✓✓</span>' : ''}</small>` : ''}
+              <p>${m.content}</p>
+            </div>
           </div>
-        </div>
-      `).join('')}
+        `;
+      }).join('')}
     </div>
+    <div id="private-typing-indicator" class="typing-indicator"></div>
     <form class="composer" onsubmit="sendPrivateMessage(event, '${match.roomId}')">
-      <input id="private-msg-input" placeholder="Write a private message…" required maxlength="500" autocomplete="off">
+      <input id="private-msg-input" placeholder="Write a private message…" required maxlength="500" autocomplete="off" oninput="handleTypingInput('${match.roomId}')" onblur="stopTypingNow('${match.roomId}')">
       <button type="submit">↑</button>
     </form>
   `));
@@ -543,6 +865,10 @@ window.joinPlan = async (id, activity) => {
   try {
     await api(`/match-requests/${id}/applications`, { method: 'POST' });
     toast(`Interest sent for ${activity}!`);
+    const targetReq = state.requests.find(r => r.id === id);
+    if (targetReq) targetReq.hasApplied = true;
+    render();
+    loadDiscover();
   } catch (err) {
     toast(err.message);
   }
@@ -572,6 +898,95 @@ window.sendRevealRequest = async matchId => {
   }
 };
 
+function renderTick(status = 'delivered') {
+  if (status === 'read') return '<span class="tick read" title="Read">✓✓</span>';
+  if (status === 'sent') return '<span class="tick sent" title="Sent">✓</span>';
+  return '<span class="tick delivered" title="Delivered">✓✓</span>';
+}
+
+function playSendSound() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(540, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(920, ctx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.1);
+  } catch {}
+}
+
+function playReceiveSound() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(760, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(480, ctx.currentTime + 0.12);
+    gain.gain.setValueAtTime(0.10, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.14);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.14);
+  } catch {}
+}
+
+let typingTimeouts = {};
+let activeTypingUsers = { campus: new Map(), private: new Map() };
+
+window.handleTypingInput = (roomId) => {
+  if (!socket?.connected) return;
+  const key = roomId || 'campus';
+  if (!typingTimeouts[key]) {
+    socket.emit('typing:start', { roomId });
+  } else {
+    clearTimeout(typingTimeouts[key]);
+  }
+  typingTimeouts[key] = setTimeout(() => {
+    socket.emit('typing:stop', { roomId });
+    delete typingTimeouts[key];
+  }, 2500);
+};
+
+window.stopTypingNow = (roomId) => {
+  if (!socket?.connected) return;
+  const key = roomId || 'campus';
+  if (typingTimeouts[key]) {
+    clearTimeout(typingTimeouts[key]);
+    delete typingTimeouts[key];
+  }
+  socket.emit('typing:stop', { roomId });
+};
+
+function updateTypingUI(type, targetElId) {
+  const el = document.querySelector(targetElId);
+  if (!el) return;
+  const map = activeTypingUsers[type];
+  if (!map || map.size === 0) {
+    el.innerHTML = '';
+    el.style.opacity = '0';
+    return;
+  }
+  const names = Array.from(map.values());
+  const label = names.length === 1 ? `${names[0]} is typing` : `${names.slice(0, 2).join(', ')} are typing`;
+  el.innerHTML = `
+    <span class="typing-dots"><span></span><span></span><span></span></span>
+    <span>${label}…</span>
+  `;
+  el.style.opacity = '1';
+}
+
 window.sendMessage = e => {
   e.preventDefault();
   const el = document.querySelector('#message');
@@ -580,6 +995,8 @@ window.sendMessage = e => {
   const val = el.value;
   el.value = '';
   el.focus();
+  stopTypingNow();
+  playSendSound();
   socket.emit('campus:message', { content: val }, r => {
     if (r?.error) toast(r.error);
   });
@@ -593,6 +1010,8 @@ window.sendPrivateMessage = (e, roomId) => {
   const val = el.value;
   el.value = '';
   el.focus();
+  stopTypingNow(roomId);
+  playSendSound();
   socket.emit('message:send', { roomId, content: val }, r => {
     if (r?.error) toast(r.error);
   });
@@ -632,15 +1051,34 @@ async function loadDiscover() {
   }
 }
 
+window.setInboxTab = tab => {
+  state.inboxTab = tab;
+  render();
+};
+
+window.closeMyPlan = async planId => {
+  if (!confirm('Are you sure you want to close this plan? It will no longer appear on Discover.')) return;
+  try {
+    await api(`/match-requests/${planId}`, { method: 'DELETE' });
+    toast('Plan closed successfully.');
+    loadInbox();
+    loadDiscover();
+  } catch (err) {
+    toast(err.message || 'Could not close plan.');
+  }
+};
+
 async function loadInbox() {
   if (!state.me) return;
   try {
-    const [matchesData, appsData] = await Promise.all([
+    const [matchesData, appsData, myPlansData] = await Promise.all([
       api('/matches').catch(() => ({ matches: [] })),
-      api('/match-requests/mine/applications').catch(() => ({ applications: [] }))
+      api('/match-requests/mine/applications').catch(() => ({ applications: [] })),
+      api('/match-requests/mine').catch(() => ({ plans: [] }))
     ]);
     state.matches = matchesData.matches || [];
     state.pendingApplications = appsData.applications || [];
+    state.myPlans = myPlansData.plans || [];
     render();
   } catch {
     // Keep existing
@@ -690,11 +1128,12 @@ function initSocket() {
         const text = message.content || '';
         const time = message.createdAt ? new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
         const isMine = state.me && (name === state.me.username || message.senderId === state.me.id);
+        if (!isMine) playReceiveSound();
         chatContainer.insertAdjacentHTML('beforeend', `
           <div class="message">
             ${avatar(name)}
             <div>
-              <b>${name}</b><small>${time}</small>
+              <b>${name}</b><small>${time}${isMine ? ' <span class="tick delivered" title="Delivered">✓✓</span>' : ''}</small>
               <p>${text}</p>
             </div>
             ${message.id && !isMine ? `<button class="report" onclick="reportMessage('${message.id}')" title="Report message to moderators">Report</button>` : ''}
@@ -707,13 +1146,20 @@ function initSocket() {
     }
     if (state.activeMatch && message.roomId === state.activeMatch.roomId) {
       state.activeMatchMessages.push(message);
+      const isMine = state.me && (message.sender?.username === state.me.username || message.senderId === state.me.id);
+      if (!isMine) {
+        playReceiveSound();
+        socket.emit('room:read', { roomId: message.roomId });
+      }
       const el = document.querySelector('#private-messages');
       if (el) {
+        const time = message.createdAt ? new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+        const status = message.status || 'delivered';
         el.insertAdjacentHTML('beforeend', `
           <div class="message">
             ${avatar(message.sender?.username || 'Student', true)}
             <div>
-              <b>${message.sender?.username || 'Student'}</b>
+              <b>${message.sender?.username || 'Student'}</b>${time ? `<small>${time}${isMine ? ` ${renderTick(status)}` : ''}</small>` : ''}
               <p>${message.content}</p>
             </div>
           </div>
@@ -723,20 +1169,60 @@ function initSocket() {
     }
   });
 
+  socket.on('room:read', ({ roomId }) => {
+    if (state.activeMatch && state.activeMatch.roomId === roomId) {
+      state.activeMatchMessages.forEach(m => {
+        const isMine = state.me && (m.sender?.username === state.me.username || m.senderId === state.me.id);
+        if (isMine) m.status = 'read';
+      });
+      document.querySelectorAll('#private-messages .tick').forEach(tick => {
+        tick.className = 'tick read';
+        tick.title = 'Read';
+        tick.innerHTML = '✓✓';
+      });
+    }
+  });
+
   socket.on('room:history', messages => {
     state.activeMatchMessages = messages || [];
     const el = document.querySelector('#private-messages');
     if (el) {
-      el.innerHTML = state.activeMatchMessages.map(m => `
-        <div class="message">
-          ${avatar(m.sender?.username || 'Student', true)}
-          <div>
-            <b>${m.sender?.username || 'Student'}</b>
-            <p>${m.content}</p>
+      el.innerHTML = state.activeMatchMessages.map(m => {
+        const isMine = state.me && (m.sender?.username === state.me.username || m.senderId === state.me.id);
+        const time = m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+        const status = m.status || 'delivered';
+        return `
+          <div class="message">
+            ${avatar(m.sender?.username || 'Student', true)}
+            <div>
+              <b>${m.sender?.username || 'Student'}</b>${time ? `<small>${time}${isMine ? ` ${renderTick(status)}` : ''}</small>` : ''}
+              <p>${m.content}</p>
+            </div>
           </div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
       el.scrollTop = el.scrollHeight;
+    }
+  });
+
+  socket.on('typing:start', ({ roomId, username, userId }) => {
+    if (state.me && userId === state.me.id) return;
+    if (state.activeMatch && roomId === state.activeMatch.roomId) {
+      activeTypingUsers.private.set(userId, username || 'Match');
+      updateTypingUI('private', '#private-typing-indicator');
+    } else if (state.view === 'chat') {
+      activeTypingUsers.campus.set(userId, username || 'Someone');
+      updateTypingUI('campus', '#campus-typing-indicator');
+    }
+  });
+
+  socket.on('typing:stop', ({ roomId, userId }) => {
+    if (state.activeMatch && roomId === state.activeMatch.roomId) {
+      activeTypingUsers.private.delete(userId);
+      updateTypingUI('private', '#private-typing-indicator');
+    } else if (state.view === 'chat') {
+      activeTypingUsers.campus.delete(userId);
+      updateTypingUI('campus', '#campus-typing-indicator');
     }
   });
 

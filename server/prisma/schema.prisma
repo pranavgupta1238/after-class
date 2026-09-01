@@ -136,6 +136,7 @@ model User {
   accountStatus  AccountStatus @default(active) @map("account_status")
   suspendedUntil DateTime?     @map("suspended_until") @db.Timestamptz(6)
   sessionVersion Int           @default(0) @map("session_version")
+  avatarConfig   Json?         @map("avatar_config")
   createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   lastActiveAt   DateTime      @default(now()) @map("last_active_at") @db.Timestamptz(6)
   campus         Campus        @relation(fields: [campusId], references: [id], onDelete: Restrict)

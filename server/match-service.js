@@ -1,13 +1,15 @@
 const { RoomKind, ApplicationStatus, MatchRequestStatus, MatchStatus, RevealStatus } = require('@prisma/client');
 
-function publicRequest(request) {
+function publicRequest(request, userId) {
+  const hasApplied = userId && request.applications?.some(a => a.applicantId === userId);
   return {
     id: request.id,
     activity: request.activity,
     location: request.location,
     scheduledAt: request.scheduledAt,
     status: request.status,
-    host: { username: request.requester.publicAlias }
+    host: { username: request.requester.publicAlias },
+    hasApplied: Boolean(hasApplied)
   };
 }
 
@@ -31,7 +33,14 @@ async function apply(prisma, user, requestId) {
   const request = await prisma.matchRequest.findFirst({
     where: { id: requestId, campusId: user.campusId, status: MatchRequestStatus.open }
   });
-  if (!request || request.requesterId === user.id) throw new Error('Request unavailable');
+  if (!request) throw new Error('This plan is no longer open.');
+  if (request.requesterId === user.id) throw new Error('You cannot apply to your own plan.');
+  
+  const existing = await prisma.matchApplication.findFirst({
+    where: { requestId, applicantId: user.id }
+  });
+  if (existing) throw new Error('You have already expressed interest in this plan.');
+
   return prisma.matchApplication.create({ data: { requestId, applicantId: user.id } });
 }
 
