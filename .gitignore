@@ -4,3 +4,4 @@ dist
 server/data.json
 .git-local
 .keys
+server/uploads

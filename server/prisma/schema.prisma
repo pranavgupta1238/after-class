@@ -137,6 +137,13 @@ model User {
   suspendedUntil DateTime?     @map("suspended_until") @db.Timestamptz(6)
   sessionVersion Int           @default(0) @map("session_version")
   avatarConfig   Json?         @map("avatar_config")
+  verificationStatus String       @default("unverified") @map("verification_status")
+  isVerified         Boolean      @default(false) @map("is_verified")
+  genderLocked       Boolean      @default(false) @map("gender_locked")
+  verificationGesture String?     @map("verification_gesture") @db.VarChar(50)
+  verificationPhoto  String?      @map("verification_photo") @db.VarChar(255)
+  verificationSubmittedAt DateTime? @map("verification_submitted_at") @db.Timestamptz(6)
+  verifiedAt         DateTime?    @map("verified_at") @db.Timestamptz(6)
   createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   lastActiveAt   DateTime      @default(now()) @map("last_active_at") @db.Timestamptz(6)
   campus         Campus        @relation(fields: [campusId], references: [id], onDelete: Restrict)
@@ -191,6 +198,7 @@ model Message {
   content     String    @db.VarChar(500)
   isFiltered  Boolean   @default(false) @map("is_filtered")
   isDeleted   Boolean   @default(false) @map("is_deleted")
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz(6)
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
   room        ChatRoom  @relation(fields: [roomId], references: [id], onDelete: Restrict)
@@ -199,6 +207,7 @@ model Message {
 
   @@index([roomId, createdAt])
   @@index([senderId, createdAt])
+  @@index([expiresAt])
   @@map("messages")
 }
 
@@ -240,20 +249,21 @@ model MatchApplication {
 }
 
 model Match {
-  id          String      @id @default(uuid()) @db.Uuid
-  requestId   String      @unique @map("request_id") @db.Uuid
-  userOneId   String      @map("user_one_id") @db.Uuid
-  userTwoId   String      @map("user_two_id") @db.Uuid
-  roomId      String      @unique @map("room_id") @db.Uuid
-  status      MatchStatus @default(active)
-  scheduledAt DateTime    @map("scheduled_at") @db.Timestamptz(6)
-  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
-  completedAt DateTime?   @map("completed_at") @db.Timestamptz(6)
-  request     MatchRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
-  userOne     User        @relation("match_user_one", fields: [userOneId], references: [id], onDelete: Restrict)
-  userTwo     User        @relation("match_user_two", fields: [userTwoId], references: [id], onDelete: Restrict)
-  room        ChatRoom    @relation(fields: [roomId], references: [id], onDelete: Restrict)
-  revealConsents RevealConsent[]
+  id               String          @id @default(uuid()) @db.Uuid
+  requestId        String          @unique @map("request_id") @db.Uuid
+  userOneId        String          @map("user_one_id") @db.Uuid
+  userTwoId        String          @map("user_two_id") @db.Uuid
+  roomId           String          @unique @map("room_id") @db.Uuid
+  status           MatchStatus     @default(active)
+  disappearingMode Boolean         @default(false) @map("disappearing_mode")
+  scheduledAt      DateTime        @map("scheduled_at") @db.Timestamptz(6)
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt      DateTime?       @map("completed_at") @db.Timestamptz(6)
+  request          MatchRequest    @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  userOne          User            @relation("match_user_one", fields: [userOneId], references: [id], onDelete: Restrict)
+  userTwo          User            @relation("match_user_two", fields: [userTwoId], references: [id], onDelete: Restrict)
+  room             ChatRoom        @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  revealConsents   RevealConsent[]
 
   @@index([userOneId, status])
   @@index([userTwoId, status])

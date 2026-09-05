@@ -15,6 +15,8 @@ function publicRequest(request, userId) {
 
 // Uses user.campusId (Prisma UUID) directly — no campus slug lookup needed.
 async function createRequest(prisma, user, data) {
+  const schedTime = new Date(data.scheduledAt).getTime();
+  const expiresAt = new Date(Math.max(Date.now() + 24 * 3600e3, schedTime + 2 * 3600e3));
   return prisma.matchRequest.create({
     data: {
       campusId: user.campusId,
@@ -24,7 +26,7 @@ async function createRequest(prisma, user, data) {
       scheduledAt: new Date(data.scheduledAt),
       genderPreference: data.genderPreference || 'any',
       orientationPreference: data.orientationPreference || 'any',
-      expiresAt: new Date(Date.now() + 48 * 3600e3)
+      expiresAt
     }
   });
 }

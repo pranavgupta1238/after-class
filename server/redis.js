@@ -101,4 +101,86 @@ async function ping() {
   }
 }
 
-module.exports = { limit, setOtp, getOtp, delOtp, ping };
+// Moderator emails helpers — allows dynamic moderator invites stored in Redis
+const moderatorFallback = new Set();
+const MODERATOR_KEY = 'afterclass:moderators';
+
+const excludedAdminsFallback = new Set();
+const EXCLUDED_ADMINS_KEY = 'afterclass:excluded_admins';
+
+async function getModeratorEmails() {
+  try {
+    const redis = getClient();
+    if (!redis) return Array.from(moderatorFallback);
+    const members = await redis.smembers(MODERATOR_KEY);
+    return members && members.length > 0 ? members : Array.from(moderatorFallback);
+  } catch (err) {
+    return Array.from(moderatorFallback);
+  }
+}
+
+async function addModeratorEmail(email) {
+  const norm = String(email || '').trim().toLowerCase();
+  if (!norm) return;
+  moderatorFallback.add(norm);
+  await removeExcludedAdminEmail(norm);
+  try {
+    const redis = getClient();
+    if (redis) await redis.sadd(MODERATOR_KEY, norm);
+  } catch {}
+}
+
+async function removeModeratorEmail(email) {
+  const norm = String(email || '').trim().toLowerCase();
+  if (!norm) return;
+  moderatorFallback.delete(norm);
+  try {
+    const redis = getClient();
+    if (redis) await redis.srem(MODERATOR_KEY, norm);
+  } catch {}
+}
+
+async function getExcludedAdminEmails() {
+  try {
+    const redis = getClient();
+    if (!redis) return Array.from(excludedAdminsFallback);
+    const members = await redis.smembers(EXCLUDED_ADMINS_KEY);
+    return members && members.length > 0 ? members : Array.from(excludedAdminsFallback);
+  } catch (err) {
+    return Array.from(excludedAdminsFallback);
+  }
+}
+
+async function addExcludedAdminEmail(email) {
+  const norm = String(email || '').trim().toLowerCase();
+  if (!norm) return;
+  excludedAdminsFallback.add(norm);
+  try {
+    const redis = getClient();
+    if (redis) await redis.sadd(EXCLUDED_ADMINS_KEY, norm);
+  } catch {}
+}
+
+async function removeExcludedAdminEmail(email) {
+  const norm = String(email || '').trim().toLowerCase();
+  if (!norm) return;
+  excludedAdminsFallback.delete(norm);
+  try {
+    const redis = getClient();
+    if (redis) await redis.srem(EXCLUDED_ADMINS_KEY, norm);
+  } catch {}
+}
+
+module.exports = {
+  limit,
+  setOtp,
+  getOtp,
+  delOtp,
+  ping,
+  getModeratorEmails,
+  addModeratorEmail,
+  removeModeratorEmail,
+  getExcludedAdminEmails,
+  addExcludedAdminEmail,
+  removeExcludedAdminEmail
+};

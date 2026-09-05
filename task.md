@@ -10,7 +10,7 @@ This file serves as the single source of truth for all engineering tasks, design
 - **Database & ORM**: PostgreSQL (Supabase) via Prisma ORM (`server/prisma/schema.prisma`)
 - **Cache & Ephemeral Storage**: Upstash Redis (OTP tokens, rate limiting) (`server/redis.js`)
 - **Email Delivery**: Resend API (`server/index.js`)
-- **Frontend**: Vanilla JavaScript (ES Modules) + Vite (`src/main.js`, `src/style.css`, `index.html`)
+- **Frontend**: Vanilla JavaScript (ES Modules) + Vite (`src/main.js`, `src/style.css`, `index.html`, `src/audio.js`, `src/confetti.js`, `src/emojis.js`)
 
 ---
 
@@ -194,22 +194,492 @@ This file serves as the single source of truth for all engineering tasks, design
 ### Task 22: Authentic Unclipped Scalloped Verification Seal Badge on Avatar Logos
 - **Date / Time**: 2026-09-02
 - **Status**: `COMPLETED`
-- **Issue**: Circle badge inside the avatar SVG was being clipped off by the SVG's 50% border radius.
-- **Fix**:
-  - Implemented `renderVerifiedBadgeSvg()` featuring the **authentic 8-point scalloped verification seal** with a crisp white border and drop shadow.
-  - Positioned the seal as an **unclipped floating overlay** at the bottom-right corner of avatars throughout the application (profile modal, cards, and sidebar).
-- **Implementation**:
-  - `src/avatar.js`: Exported `renderVerifiedBadgeSvg()`.
-  - `src/main.js`: Wrapped `avatar()` with the unclipped floating seal.
 
 ---
 
-## Active & Upcoming Tasks
+### Task 23: Card Avatar Sizing & Prominent Host Badge Row
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
 
-| # | Task Description | Priority | Status |
-|---|------------------|----------|--------|
-| 1 | Continuous tracking & audit in `task.md` | Normal | `ACTIVE` |
-| 2 | Campus location quick-picks chips | Normal | `PENDING` |
-| 3 | Identity reveal celebration animation | Normal | `PENDING` |
-| 4 | Moderation dashboard & user reporting admin tools | Normal | `PENDING` |
-| 5 | Browser push notifications | Low | `PENDING` |
+---
+
+### Task 24: Stage 8 Campus Moderation & Live Incident Review Center
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 25: Interactive Report Reason Modal & Context Submissions in Campus Chat
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 26: Modal Input/Radio Styles Fix & Textarea Horizontal Overflow Constraint
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 27: Web Audio Volume & Harmonic Resonance Boost
+- **Date / Time**: 2026-09-02
+- **Status**: `SUPERSEDED` by Task 28.
+
+---
+
+### Task 28: Zero-Dependency Embedded Audio Engine (`src/audio.js`)
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 29: Redundant Global Header Removal & Streamlined Page Spacing
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 30: Modern Speech-Bubble Message UI for 1-on-1 Matched Chats
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 31: Campus Location, Activity & Time Quick-Pick Chips
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 32: Plan Creation Future Date & Time Guard
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 33: Custom Branded Close Plan Confirmation Modal
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 34: Native Web Push & Browser Notifications Engine
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 35: In-App Notification Mute Toggle & Mutual Identity Reveal Confetti Flow
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 36: Inbox Notification Bar Spacing & Clearance Fix
+- **Date / Time**: 2026-09-02
+- **Status**: `SUPERSEDED` by Task 37.
+
+---
+
+### Task 37: Inbox De-Clutter & Profile Passport Notification Settings
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 38: Instant Reactive Notification Toggle Update
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 39: Tactile Physical ON/OFF Switch for Notifications
+- **Date / Time**: 2026-09-02
+- **Status**: `SUPERSEDED` by Task 40.
+
+---
+
+### Task 40: Skeuomorphic 3D Electrical Rocker Switch
+- **Date / Time**: 2026-09-02
+- **Status**: `SUPERSEDED` by Task 42.
+
+---
+
+### Task 41: Luminous Green LED Pilot Light for Rocker Switch ON State
+- **Date / Time**: 2026-09-02
+- **Status**: `SUPERSEDED` by Task 42.
+
+---
+
+### Task 42: Ultra-Realistic Skeuomorphic 3D Mechanical Rocker Switch
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 43: Minimalist Typography & Mechanical Switch Alignment
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 44: Dedicated Settings & Campus Preferences Page
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 45: Authenticated User Email in `/api/me` Response
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 46: Streamline Profile Passport Modal
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 47: Campus Chat Dashed Icon Perfect Symmetry Fix
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 48: Automated Ephemeral Retention Policy (7-Day Campus Chat / 14-Day DMs)
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 49: 24-Hour Disappearing Messages in 1-on-1 Private DMs
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 50: Special Afterclass Emojis & Animated GIF Suite
+- **Date / Time**: 2026-09-02
+- **Status**: `SUPERSEDED` by Task 52.
+
+---
+
+### Task 51: Dedicated Afterclass Campus Stickers & Emojis Suite
+- **Date / Time**: 2026-09-02
+- **Status**: `SUPERSEDED` by Task 52.
+
+---
+
+### Task 52: Full Famous Unicode Emoji Suite (200+ Emojis, Live Search & Category Navigation)
+- **Date / Time**: 2026-09-02
+- **Status**: `SUPERSEDED` by Task 54.
+
+---
+
+### Task 53: Category Tab Click Propagation & Tray Retention Fix
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 54: 800+ Popular Unicode Emojis Full Suite & Instant Search Index (`src/emojis.js`)
+- **Date / Time**: 2026-09-02
+- **Status**: `SUPERSEDED` by Task 56.
+
+---
+
+### Task 55: Expanded 100+ Party, Clubbing & Activities Suite
+- **Date / Time**: 2026-09-02
+- **Status**: `SUPERSEDED` by Task 56.
+
+---
+
+### Task 56: Dedicated Celebration & Party Suite (100 Emojis, Clean Categorization)
+- **Date / Time**: 2026-09-02
+- **Status**: `SUPERSEDED` by Task 57.
+
+---
+
+### Task 57: Multi-Tap Emoji Insertion & Category Streamlining (Removed Objects & Travel)
+- **Date / Time**: 2026-09-02
+- **Status**: `SUPERSEDED` by Task 58.
+
+---
+
+### Task 58: Sleek Minimalist Vector Emoji Button & Search Precision Tuning
+- **Date / Time**: 2026-09-02
+- **Status**: `SUPERSEDED` by Task 59.
+
+---
+
+### Task 59: WhatsApp/Telegram-Style Integrated Input Capsule with Embedded Emoji Button
+- **Date / Time**: 2026-09-02
+- **Status**: `SUPERSEDED` by Task 60.
+
+---
+
+### Task 60: Real-Time Live Presence Counter in Campus Chat
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 61: Dual Interlocking Gears Settings Icon & Profile Row De-duplication
+- **Date / Time**: 2026-09-02
+- **Status**: `SUPERSEDED` by Task 63.
+
+---
+
+### Task 62: Symmetrical Dual Interlocking Gears Settings Icon
+- **Date / Time**: 2026-09-02
+- **Status**: `SUPERSEDED` by Task 63.
+
+---
+
+### Task 63: Classic Minimalist Single Precision Gear for Settings
+- **Date / Time**: 2026-09-02
+- **Status**: `SUPERSEDED` by Task 64.
+
+---
+
+### Task 64: Unclipped Symmetrical 8-Tooth Settings Gear Vector
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 65: Settings Privacy Enhancement & Shield Emoji Removal
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 66: Sticky Sidebar Navigation & Independent Content Scrolling
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+
+---
+
+### Task 67: WhatsApp-Style Swipe-to-Reply & Quoted Messages in Campus Chat
+- **Date / Time**: 2026-09-02
+- **Status**: `COMPLETED`
+- **Features & Enhancements**:
+  1. **Pull to Right Gesture (Touch & Drag)**: Swiping any message to the right triggers smooth translation with an animated green **`↩`** reply cue. Releasing past threshold sets the message into reply mode with haptic feedback.
+  2. **1-Click Desktop Hover Action**: Hovering on any message reveals a sleek **`↩ Reply`** button next to Report for instant desktop interaction.
+  3. **Reply Preview Capsule (`#reply-preview-container`)**: Appears directly above the input pill showing original sender, message snippet, and a `✕` dismiss button while focusing the text field.
+  4. **Quoted Snippet in Message Stream**: Sent replies render an embedded WhatsApp quote bubble. Tapping it smoothly scrolls up to and pulses the original message.
+
+---
+
+## Roadmap Status: 100% Core Complete ✦
+
+### Task 68: Plan Expiration Alignment & Accurate Expired Status Badges
+- **Date / Time**: 2026-09-04
+- **Status**: `COMPLETED`
+- **Issue**: Plans were disappearing prematurely from Discover because `expiresAt` was hardcoded to `creation + 48h` instead of the actual scheduled meetup date. In "My Posted Plans", past expired plans still showed the green `Active` badge.
+- **Root Cause & Fixes**:
+  1. `server/match-service.js`: Updated `createRequest` so `expiresAt` stays active until `scheduledAt + 2 hours` (grace period) or at least 24h.
+  2. `src/main.js`: Updated `inbox()` so any plan whose scheduled or expiration date has elapsed renders an **`Expired`** badge instead of `Active`, with `Close plan` button hidden.
+  3. Database: Updated active future plans (e.g. *Coffee on Sept 8*) so they are immediately visible on the public **Discover** feed.
+
+### Task 69: Comprehensive Session Management & Multi-Device Remote Invalidation
+- **Date / Time**: 2026-09-04
+- **Status**: `COMPLETED`
+- **Features & Enhancements**:
+  1. **Dual Logout Endpoints (`server/index.js`)**:
+     - `POST /api/auth/logout`: Clears local device cookie without disrupting logins on other devices.
+     - `POST /api/auth/logout-all`: Increments `user.sessionVersion` in PostgreSQL, immediately invalidating all active JWT tokens globally across all devices/browsers.
+  2. **Device Detection & Active Session UI (`src/main.js`)**:
+     - Added `getDeviceDescription()` to detect platform/browser (`macOS · Chrome`, `Windows PC`, `iOS Device`, etc.).
+     - Section 4 of **Settings** displays current device info with active status badge and individual logout button.
+  3. **Instant Remote Invalidation Card & Confirmation Modal**:
+     - Prominent amber security card: *"Sign Out of All Devices"*.
+     - Branded confirmation modal warning the student that remote sessions on college computers, lab laptops, or other phones will be instantly terminated.
+
+### Task 70: Full Saved Plans & Bookmarks Engine
+- **Date / Time**: 2026-09-04
+- **Status**: `COMPLETED`
+- **Features & Enhancements**:
+  1. **Persistent Bookmarks Storage (`src/main.js`)**:
+     - `savedPlanIds`: Synchronized with `localStorage` (`afterclass_saved_plans`) across page refreshes.
+     - `toggleSavePlan(id)`: Toggles between outline `♡` and filled `❤️` with bounce pop animation and feedback toasts.
+  2. **Card Heart Button UI (`plan-heart-btn`)**:
+     - Embedded in all plan cards across Home and Discover.
+  3. **Discover Filter Tabs (`All plans` & `❤️ Saved`)**:
+     - Real-time counter pills: `All plans (N)` and `❤️ Saved (N)`.
+     - Displays dedicated saved list or helpful empty state with 1-click return to all plans.
+
+### Task 71: Minimalist Vector Bookmark Ribbon for Saved Plans
+- **Date / Time**: 2026-09-04
+- **Status**: `COMPLETED`
+- **Features & Enhancements**:
+  1. **Vector Bookmark SVG**: Replaced emoji heart and animations with a clean, tasteful vector bookmark ribbon (`stroke-width: 2`, filled with `#244d42` when active).
+  2. **Zero Blinking & Calm Interaction**: Removed all pulsing and popping keyframes for a clean, premium visual feel.
+  3. **Discover Filter Pill**: Updated filter pill to clean **`Saved (N)`** with embedded vector bookmark icon.
+
+### Task 72: Dedicated Full-Screen Sign Up & Login Page
+- **Date / Time**: 2026-09-05
+- **Status**: `COMPLETED`
+- **Features & Enhancements**:
+  1. **Split-Screen Brand & Auth Experience (`authPage()`)**:
+     - **Left Hero Side**: Large coral brand star (`✦ afterclass`), headline *"Your campus, without the pressure"*, 3 privacy guarantee cards (100% Anonymous Identity, Verified Students Only, Passwordless Simplicity), and a live campus status badge.
+     - **Right Interactive Auth Card**:
+       - Step 1: Clean university email input (`you@st.niituniversity.in`) + *"Send Verification Code →"* button + *"Browse as guest →"* link.
+       - Step 2: 6-digit PIN code input with monospace letter-spacing, dev code preview chip, change email link, and *"Enter Afterclass ✦"* action.
+  2. **Seamless Navigation & Onboarding Routing**:
+     - Unauthenticated users clicking *"Sign In / Join Campus ✦"* on Home or sidebar bottom smoothly route to `go('auth')`.
+     - Upon successful verification, users receive a welcome chime and are automatically redirected into **Campus Chat**.
+
+### Task 73: Default Sign Up & Login Page Landing for Signed-Out Visitors
+- **Date / Time**: 2026-09-05
+- **Status**: `COMPLETED`
+- **Features & Enhancements**:
+  1. **Default Auth View Routing (`src/main.js`)**:
+     - `state.view`: Initialized to `'auth'` by default.
+     - `loadMe()`: If the user is unauthenticated, seamlessly displays the dedicated **Sign Up & Login page**. If already authenticated, automatically bypasses and opens **Campus Chat**.
+  2. **Logout Transition**:
+     - Logging out from the current device or all devices immediately transitions the viewport to the **Sign In / Sign Up** screen.
+
+### Task 74: Animated Living Campus Onboarding Redesign
+- **Date / Time**: 2026-09-05
+- **Status**: `COMPLETED`
+- **Features & Enhancements**:
+  1. **Living Campus Ambient Background**:
+     - Floating glassmorphic campus cards drifting dynamically around the viewport with distinct physics paths.
+  2. **Left Hero Live Feed Simulation Widget**:
+     - Live feed simulation card with student avatars, plan titles, and badges.
+
+### Task 75: Unified Luxury Campus Deck Onboarding Redesign
+- **Date / Time**: 2026-09-05
+- **Status**: `COMPLETED`
+- **Features & Enhancements**:
+  1. **Unified Ambient Dark Emerald Atmosphere**:
+     - Replaced jarring harsh black vs. graph-paper split with a cohesive, luxury dark-forest-to-emerald gradient with subtle organic radial lighting (`#091712` to `#16382c`) and floating particle orbs.
+     - Top navigation bar featuring brand mark `✦ afterclass` and live campus pulse badge (`🟢 NIIT UNIVERSITY · VERIFIED CAMPUS`).
+  2. **Interactive 3-Pillar Campus Showcase (`switchAuthShowcase`)**:
+     - Completely eliminated broken, overlapping, colliding absolute cards and text cutoffs.
+     - Implemented an interactive switchable deck with 3 dedicated campus pillars:
+       - 💬 **Campus Chat**: Demonstrates unfiltered, safe campus discussion (library AC, lecture coffee, midterm prep) with reactions (`❄️ 6`, `❤️ 9`, `☕ 7`) and zero real names.
+       - 👫 **Find Company & Pair Up**: Solves loneliness and lecture downtime by allowing students to pair up for iced coffee, campus walks, or study sessions with friends/opposite gender with comfortable anonymous connections.
+       - ⚡ **Spontaneous Plans**: Badminton doubles, late-night food court Maggi runs, and amphitheater acoustic jamming sessions with live attendee spots (`👥 3 / 4 Joined`).
+  3. **High-End Frosted Glass Student Auth Card**:
+     - Deep frosted glass container (`backdrop-filter: blur(30px)`) with crisp glowing borders.
+     - Clean university email input with focus glow ring, clear enrollment verification notice, high-contrast primary submit button (`Send Verification Code →`), and guest browsing option.
+     - 6-digit OTP verification card with monospace letter-spacing and instant resend.
+
+### Task 76: University-Agnostic Onboarding for Multi-Campus Expansion
+- **Date / Time**: 2026-09-05
+- **Status**: `COMPLETED`
+- **Features & Enhancements**:
+  1. **Generalized Campus Badge**:
+     - Updated top navigation badge from `NIIT UNIVERSITY · VERIFIED CAMPUS` to `VERIFIED CAMPUS NETWORK`.
+  2. **Multi-Campus Value Proposition**:
+     - Changed hero lead text to: *"The private social network built exclusively for verified college students."*
+  3. **Universal Student Email Placeholder & Trust Pills**:
+     - Updated email input placeholder from `you@st.niituniversity.in` to universal `you@college.edu`.
+     - Changed trust strip from `NIIT Students Only` to `College Students Only`.
+  4. **Chat Guard Toast Update**:
+     - Updated unauthenticated chat prompt toasts to `"Verify your college email to chat."`
+
+### Task 77: Real-Time Emoji Reactions Engine for Campus Chat
+- **Date / Time**: 2026-09-05
+- **Status**: `COMPLETED`
+- **Features & Enhancements**:
+  1. **Reaction Persistence & State Engine (`server/reactions.js`)**:
+     - Built `reactionsService` supporting Redis cache and in-memory fallback.
+     - Supports 8 core campus reaction emojis: `['❤️', '🔥', '👍', '😂', '👀', '☕', '❄️', '💯']`.
+     - `toggleReaction(messageId, emoji, userId)`: Atomic add/remove per student.
+     - `getBatchReactions(messageIds, userId)`: Fast bulk retrieval.
+  2. **Real-Time WebSocket Sync (`server/index.js`)**:
+     - `socket.on('message:react')`: Validates parameters and student authentication, toggles reaction, and broadcasts `message:reaction:update` with updated tallies to all connected room members.
+     - `/api/messages`: Automatically enriches fetched chat history with reaction tallies.
+  3. **Interactive Reaction UI (`src/main.js` & `src/style.css`)**:
+     - Added `.react-hover-btn` to message actions (`😀 React`).
+     - Added floating reaction picker popover (`.msg-reaction-picker-popover`) on hover/tap.
+     - Rendered reaction pills (`.msg-reaction-pill`) beneath messages with active highlight and count.
+     - 1-click reaction toggling on existing pills with optimistic UI updates and `@keyframes reactionPopAnim` bounce animations.
+
+### Task 78: Multi-Step "Start for Free", Gender Selection & Google Sign-In Flow
+- **Date / Time**: 2026-09-05
+- **Status**: `COMPLETED`
+- **Features & Enhancements**:
+  1. **Initial Showcase Card State (`welcome`)**:
+     - Added prominent **`⚡ Start for Free →`** button.
+     - Added **`Continue with Google`** button featuring the official Google multi-color SVG mark for instant student sign-in.
+     - Highlighted value-prop bullets for Anonymous Campus Chat, Companion Pairing, and Spontaneous Activities.
+  2. **Dedicated Step 1 Window (`form`)**:
+     - Smooth transition on clicking "Start for Free" with a `← Back` navigation control.
+     - **College Student Email**: Clean input with university domain placeholder.
+     - **Gender Selection Grid**: 4 selectable pills (`👩 Woman`, `👨 Man`, `🧑 Non-binary`, `🔒 Secret`) specifically powering the opposite-gender and companion pairing engine.
+     - Privacy reassurance notice: Email and gender are strictly used for verification and matching, never revealed publicly.
+  3. **Backend Integration (`server/index.js`)**:
+     - `/api/auth/send-otp` & `/api/auth/verify-otp`: Persists chosen gender directly into `prisma.user`.
+     - `/api/auth/google-fast`: Fast 1-click sign-in endpoint for university Google accounts.
+
+### Task 80: Real Google OAuth 2.0 Integration & Verification Flow
+- **Date / Time**: 2026-09-05
+- **Status**: `COMPLETED`
+- **Issue**: "Continue with Google" previously showed a browser prompt alert asking to type an email instead of initiating genuine Google OAuth consent.
+- **Features & Enhancements**:
+  1. **Frontend Google OAuth Initiation (`src/main.js`)**:
+     - Replaced the browser `prompt()` alert with direct browser redirect: `window.location.href = /api/auth/google?gender=...`.
+     - Preserves the student's selected gender preference through OAuth state parameter.
+     - Added URL parameter parser on boot to catch `auth_error` from canceled/denied OAuth attempts and display native toast notifications.
+  2. **Backend OAuth Endpoints (`server/index.js`)**:
+     - `GET /api/auth/google`: Initiates Google OAuth consent dialog with `openid email profile` scopes. If credentials are not yet configured in `.env`, serves an informative dark-emerald developer setup page with exact callback instructions.
+     - `GET /api/auth/google/callback`: Performs server-to-server token exchange with `https://oauth2.googleapis.com/token`, fetches profile from Google userinfo API, verifies student email against campus domains (`campuses.fromEmail`), creates/updates user in `prisma.user`, issues 30-day session cookie, and redirects into `/chat`.
+### Task 81: Google Brand Icon Sizing & Strict University Domain Guard
+- **Date / Time**: 2026-09-05
+- **Status**: `COMPLETED`
+- **Features & Enhancements**:
+  1. **Google Multi-Color SVG Brand Icon**:
+     - Fixed missing brand icon display by adding explicit dimensions (`width="20" height="20"`) and CSS rules (`.auth-google-icon { width: 20px; height: 20px; min-width: 20px; flex-shrink: 0; }`).
+     - Added `.auth-google-hint`: *"University student Google accounts only"* below the button for upfront clarity.
+### Task 82: White Screen Fix on Google OAuth Redirect
+- **Date / Time**: 2026-09-05
+- **Status**: `COMPLETED`
+- **Root Cause**: On boot, `bootView && views[bootView]` was evaluated at top-level module scope, but `const views` was scoped locally inside `render()`. This triggered a runtime `ReferenceError: views is not defined`, preventing the entire frontend bundle from mounting and resulting in a blank white page.
+- **Changes Made**:
+### Task 84: Fixed Multi-Click Lag Between Discover Filter Tabs
+- **Date / Time**: 2026-09-05
+- **Status**: `COMPLETED`
+- **Root Cause**:
+  1. `discover()` contained `setTimeout(loadDiscover, 0)` directly within its render function, and `loadDiscover()` invoked `render()`, creating an infinite rapid re-render loop that tore down and rebuilt the DOM continuously in the background. Clicks on the filter buttons (`All plans` / `Saved`) often landed mid-render and were dropped.
+  2. The SVG bookmark icon inside the `Saved` filter button lacked `pointer-events: none`, causing click events on the icon to occasionally not trigger the button handler smoothly.
+- **Changes Made**:
+  1. Removed `setTimeout(loadDiscover, 0)` from `discover()` and `setTimeout(loadInbox, 0)` from `inbox()`.
+  2. Moved view data-fetching cleanly to navigation route transitions (`window.go`).
+  3. Added concurrency locks (`discoverLoading`, `inboxLoading`) to prevent duplicate network calls and UI tearing.
+### Task 85: Default Landing View Restored to Home on Refresh
+### Task 86: Disentangled Profile Pill from Settings Navigation
+- **Date / Time**: 2026-09-05
+- **Status**: `COMPLETED`
+- **Issue**: Clicking the bottom-left profile pill opened the Settings page instead of the student's profile card.
+- **Changes Made**:
+### Task 87: Browser URL Synchronization & Deep Linking Engine
+- **Date / Time**: 2026-09-05
+- **Status**: `COMPLETED`
+- **Issue**: Navigating between tabs kept the browser address bar stuck on `localhost:3002` without reflecting the active route (`/chat`, `/discover`, etc.).
+- **Features & Enhancements**:
+  1. **Dynamic URL Path Synchronization (`window.go`)**:
+     - Synchronized the browser's address bar on tab navigation using `window.history.pushState` / `replaceState`:
+       - Campus chat &rarr; `/chat`
+       - Discover &rarr; `/discover`
+       - Inbox &rarr; `/inbox`
+       - Safety &rarr; `/safety`
+       - Settings &rarr; `/settings`
+       - Home &rarr; `/`
+  2. **Direct Route Deep-Linking & Refresh Support**:
+     - Visiting or refreshing a URL like `http://localhost:3002/chat` immediately opens that view directly.
+  3. **Browser History (Back & Forward) Support**:
+     - Added `window.addEventListener('popstate', ...)` so browser Back and Forward navigation switches views with zero page reload.
+  4. **Rebuilt Production Bundle**: Compiled clean Vite build (`index-DB_OSf7Y.js`).
+
+### Task 88: Restored Customize Character & Wardrobe on Student Profile Modal
+- **Date / Time**: 2026-09-05
+- **Status**: `COMPLETED`
+- **Changes Made**:
+  1. Restored the prominent **`🎨 Customize Character & Wardrobe →`** action button inside the **Student Profile Modal** (`renderAvatarPreviewModal` in `src/main.js`).
+  2. Maintained the button's removal strictly from the Settings page as originally requested.
+  3. Rebuilt the frontend bundle with Vite (`index-DszmndKI.js`).
