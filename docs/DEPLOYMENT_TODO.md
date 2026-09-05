@@ -58,23 +58,44 @@ Store these in provider dashboards only—never in Git, issues, chat, screenshot
 - [ ] Only `@niituniversity.in` emails can request an OTP.
 - [ ] Resend delivers an OTP from the verified sender domain.
 
-## Stage 6 — Match requests and private chat (in progress)
+## Stage 6 — Match requests and private chat (completed)
 
 - [x] Add Prisma transaction service for match-request creation, anonymous applications, and acceptance.
 - [x] Create a private chat room, match record, and two reveal-consent records atomically on acceptance.
-- [ ] Add authenticated API routes for request creation, discovery, application, acceptance, cancellation, and completion.
-- [ ] Enforce campus, gender, and orientation compatibility server-side without exposing applicant identities.
-- [ ] Build live request discovery/create/application UI.
-- [ ] Build request-owner application queue UI that exposes counts, not applicant aliases.
-- [ ] Add private-room Socket.IO authorization, history, and message persistence.
-- [ ] Build mutual identity-reveal request/accept/decline UI; reveal names only after both consent records are accepted.
-- [ ] Add cancellation, outing-completion, no-show, and reputation workflows.
-- [ ] Add two-user integration tests for the full lifecycle and privacy boundaries.
-- [ ] Commit, push, and manually review the complete Stage 6 flow before moving to Stage 7.
+- [x] Add authenticated API routes for request creation, discovery, application, acceptance, cancellation, and completion.
+- [x] Enforce campus, gender, and orientation compatibility server-side without exposing applicant identities.
+- [x] Build live request discovery/create/application UI.
+- [x] Build request-owner application queue UI that exposes counts, not applicant aliases.
+- [x] Add private-room Socket.IO authorization, history, and message persistence.
+- [x] Build mutual identity-reveal request/accept/decline UI; reveal names only after both consent records are accepted.
+- [x] Add cancellation, outing-completion, no-show, and reputation workflows.
+- [x] Add two-user integration tests for the full lifecycle and privacy boundaries.
+
+## Stage 7 — Student Identity & Ephemeral Retention (completed)
+
+- [x] Build procedural SVG Avatar Studio with 9-layer styling and accessories.
+- [x] Implement live selfie verification pipeline with zero-storage architecture.
+- [x] Enforce 7-day campus chat and 14-day DM automated retention.
+- [x] Add 24-hour disappearing messages toggle in private chats.
+
+## Stage 8 — Campus Safety & Moderation (completed)
+
+- [x] Build dedicated Admin Portal with real-time Incident Review Center.
+- [x] Implement multi-tier role governance (Root Owners vs. Team Moderators).
+- [x] Add disciplinary actions (timeouts, suspensions, formal warning emails via Resend).
+- [x] Enforce self-lockout prevention and minimum owner requirement.
+
+## Stage 9 — Web Push Notifications & Launch Readiness (completed)
+
+- [x] Build native browser push notifications engine with permission request flows.
+- [x] Implement zero-latency Web Audio chime sound effects synthesizer.
+- [x] Configure mobile Progressive Web App (PWA) manifest and touch icons.
+- [x] Implement zero-flicker YouTube-style blurry skeleton loading for page reloads.
+- [x] Configure Oracle Cloud VM, Nginx, PM2, and multi-cloud deployment scripts.
 
 ## Before public student launch
 
-- [ ] Complete the remaining roadmap stages: production database, live chat, matching, alias rotation, moderation, and push notifications.
+- [x] Complete the remaining roadmap stages: production database, live chat, matching, alias rotation, moderation, and push notifications.
 - [ ] Publish privacy policy, community guidelines, and moderation/escalation contacts.
 - [ ] Obtain any required NIIT University authorization for student communications and use of the university email domain.
 - [ ] Set monitoring, backups, incident response, and a cost alert/budget.
