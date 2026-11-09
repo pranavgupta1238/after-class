@@ -12,6 +12,7 @@ const { PrismaClient, RoomKind, MatchStatus, RevealStatus } = require('@prisma/c
 const campuses = require('./campuses');
 const matchService = require('./match-service');
 const { canPair } = require('./match-policy');
+const { campusReportCoverage } = require('./report-coverage');
 const redis = require('./redis');
 
 const app = express();
@@ -1236,12 +1237,20 @@ app.get('/api/admin/reports', requireAdmin, async (req, res) => {
   try {
     const rawReports = await prisma.report.findMany({
       include: {
-        reporter: { select: { id: true, publicAlias: true, email: true, campus: { select: { name: true } } } },
-        reportedUser: { select: { id: true, publicAlias: true, email: true, accountStatus: true, suspendedUntil: true, avatarConfig: true } },
+        reporter: { select: { id: true, campusId: true, publicAlias: true, email: true, campus: { select: { name: true } } } },
+        reportedUser: { select: { id: true, campusId: true, publicAlias: true, email: true, accountStatus: true, suspendedUntil: true, avatarConfig: true } },
         message: { select: { id: true, roomId: true, senderId: true, senderAlias: true, content: true, createdAt: true } }
       },
       orderBy: { createdAt: 'desc' }
     });
+
+    // Full history, before any client filters. Count registered accounts, not campus enrollment.
+    const campusIds = [...new Set(rawReports.map(r => r.reportedUser?.campusId).filter(Boolean))];
+    const campusCounts = campusIds.length ? await prisma.user.groupBy({
+      by: ['campusId'], where: { campusId: { in: campusIds } }, _count: { _all: true }
+    }) : [];
+    const coverageByUser = campusReportCoverage(rawReports,
+      new Map(campusCounts.map(c => [c.campusId, c._count._all])));
 
     const reportedUserIds = [...new Set(rawReports.map(r => r.reportedUserId).filter(Boolean))];
     const warnings = await prisma.moderationAction.findMany({
@@ -1344,6 +1353,8 @@ app.get('/api/admin/reports', requireAdmin, async (req, res) => {
           publicAlias: report.reportedUser.publicAlias,
           email: report.reportedUser.email,
           status: report.reportedUser.accountStatus,
+          accountStatus: report.reportedUser.accountStatus,
+          reportCoverage: coverageByUser.get(report.reportedUser.id),
           suspendedUntil: report.reportedUser.suspendedUntil,
           avatarConfig: report.reportedUser.avatarConfig,
           warningCount: userWarnings.length,

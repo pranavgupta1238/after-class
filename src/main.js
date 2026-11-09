@@ -1074,16 +1074,16 @@ function adminPortal() {
   const primaryAdmins = state.adminPrimaryAdmins || [];
   const teamModerators = state.adminModerators || [];
 
-  const pendingCount = reports.filter(r => r.status === 'pending').length;
-  const resolvedCount = reports.filter(r => r.status !== 'pending').length;
+  const pendingCount = reports.filter(r => ['pending', 'reviewing'].includes(r.status)).length;
+  const resolvedCount = reports.filter(r => ['resolved', 'dismissed'].includes(r.status)).length;
   const totalReportsCount = reports.length;
   const totalStaffCount = primaryAdmins.length + teamModerators.length;
 
   let filteredReports = reports;
   if (filter === 'pending') {
-    filteredReports = reports.filter(r => r.status === 'pending');
+    filteredReports = reports.filter(r => ['pending', 'reviewing'].includes(r.status));
   } else if (filter === 'resolved') {
-    filteredReports = reports.filter(r => r.status !== 'pending');
+    filteredReports = reports.filter(r => ['resolved', 'dismissed'].includes(r.status));
   }
 
   // Group reports by reported user with rich analytics
@@ -1101,20 +1101,23 @@ function adminPortal() {
   });
 
   const allUserGroups = Object.values(userGroupsMap).map(g => {
-    const pendingInGroup = g.reports.filter(r => r.status === 'pending').length;
-    const resolvedInGroup = g.reports.filter(r => r.status !== 'pending').length;
+    const pendingInGroup = g.reports.filter(r => ['pending', 'reviewing'].includes(r.status)).length;
+    const resolvedInGroup = g.reports.filter(r => ['resolved', 'dismissed'].includes(r.status)).length;
 
     // Calculate unique and repeat reporters
     const reporterCounts = {};
+    const reporterAliases = {};
     g.reports.forEach(r => {
-      const repKey = r.reporter?.publicAlias || r.reporter?.alias || r.reporter?.email || 'Anonymous';
+      const repKey = r.reporter?.id || r.reporterId;
+      if (!repKey) return;
+      reporterAliases[repKey] = r.reporter?.publicAlias || r.reporter?.alias || 'Anonymous';
       reporterCounts[repKey] = (reporterCounts[repKey] || 0) + 1;
     });
 
     const uniqueReporters = Object.keys(reporterCounts).length;
     const repeatReporters = Object.entries(reporterCounts)
       .filter(([_, count]) => count > 1)
-      .map(([alias, count]) => ({ alias, count }));
+      .map(([id, count]) => ({ alias: reporterAliases[id], count }));
 
     // Find latest report date
     const latestDate = g.reports.reduce((latest, r) => {
@@ -1607,6 +1610,25 @@ function renderAdminVerificationsPanel() {
   `;
 }
 
+function formatReportCoverage(coverage) {
+  const value = coverage?.percentage;
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 'Unavailable';
+  if (value > 0 && value < 0.01) return '&lt;0.01%';
+  return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
+}
+
+function renderReportCoverage(coverage) {
+  if (!coverage) return '<section class="report-coverage"><h3>Campus report coverage</h3><p>Coverage is unavailable. Refresh to try again.</p></section>';
+  const outcomes = coverage.outcomes;
+  return `<section class="report-coverage" aria-label="Lifetime campus report coverage">
+    <div class="report-coverage-summary"><div><h3>Campus report coverage</h3>
+      <p>${coverage.uniqueReporters} distinct reporter${coverage.uniqueReporters === 1 ? '' : 's'} · ${coverage.registeredAccounts ?? 'Unknown'} registered campus accounts</p></div>
+      <strong>${formatReportCoverage(coverage)}</strong></div>
+    <dl class="report-coverage-outcomes">${['pending', 'reviewing', 'resolved', 'dismissed'].map(status => `<div><dt>${status[0].toUpperCase() + status.slice(1)}</dt><dd>${outcomes[status]}</dd></div>`).join('')}</dl>
+    <details><summary>How this is calculated</summary><p>Distinct same-campus reporters ÷ currently registered Afterclass accounts at that campus × 100. Each reporter counts once across the full report history, including dismissed reports. Self-reports and reports from other campuses are excluded.</p><p>The denominator includes the reported account and restricted accounts. It is not total college enrollment. The outcome counts above count reports, not people. Filters do not change this lifetime measure.</p><p>Reports are allegations. Resolved does not necessarily mean substantiated, and a low percentage does not establish safety. Review the evidence before taking action.</p></details>
+  </section>`;
+}
+
 function renderAdminUsersTable(userGroups) {
   return `<div class="review-account-list">${userGroups.map(g=>{
     const alias=g.user?.publicAlias || g.user?.alias || 'Student';
@@ -1614,7 +1636,7 @@ function renderAdminUsersTable(userGroups) {
     const suspended=g.user?.suspendedUntil && new Date(g.user.suspendedUntil)>new Date();
     const status=banned?'Banned':suspended?'Timed out':'Active';
     const latest=g.latestDate?new Date(g.latestDate).toLocaleDateString([], {day:'numeric',month:'short'}):'—';
-    return `<article class="review-account"><div class="review-account-person">${avatar(g.user?.avatarConfig || alias,false)}<div><h3>${escapeHtml(alias)}</h3><span class="review-account-status ${banned||suspended?'restricted':''}">${status}</span></div></div><dl class="review-account-facts"><div><dt>Reports</dt><dd>${g.reports.length}<small>${g.pendingCount} pending</small></dd></div><div><dt>Reported by</dt><dd>${g.uniqueReporters} <small>${g.uniqueReporters===1?'person':'people'}</small></dd></div><div><dt>Warnings</dt><dd>${g.warningCount}</dd></div><div><dt>Latest report</dt><dd>${latest}</dd></div></dl><button class="review-open" onclick="selectAdminUser('${escapeQuotes(g.userId)}')" aria-label="Review reports for ${escapeHtml(alias)}">Review reports</button></article>`;
+    return `<article class="review-account"><div class="review-account-person">${avatar(g.user?.avatarConfig || alias,false)}<div><h3>${escapeHtml(alias)}</h3><span class="review-account-status ${banned||suspended?'restricted':''}">${status}</span></div></div><dl class="review-account-facts"><div><dt>Reports</dt><dd>${g.reports.length}<small>${g.pendingCount} pending</small></dd></div><div class="review-coverage"><dt>Campus reports · lifetime</dt><dd>${formatReportCoverage(g.user?.reportCoverage)}<small>${g.user?.reportCoverage ? `${g.user.reportCoverage.uniqueReporters} of ${g.user.reportCoverage.registeredAccounts ?? '?'} accounts` : 'Refresh to load'}</small></dd></div><div><dt>Warnings</dt><dd>${g.warningCount}</dd></div><div><dt>Latest report</dt><dd>${latest}</dd></div></dl><button class="review-open" onclick="selectAdminUser('${escapeQuotes(g.userId)}')" aria-label="Review reports for ${escapeHtml(alias)}">Review reports</button></article>`;
   }).join('')}</div>`;
 }
 
@@ -1624,7 +1646,7 @@ function renderAdminUserGroup(group) {
   const userEmail = user?.email || '';
   const isBanned = user?.accountStatus === 'banned' || user?.isBanned;
   const isTimedOut = user?.suspendedUntil && new Date(user.suspendedUntil) > new Date();
-  const pendingInGroup = pendingCount || reports.filter(r => r.status === 'pending').length;
+  const pendingInGroup = pendingCount || reports.filter(r => ['pending', 'reviewing'].includes(r.status)).length;
 
   return `
     <section class="admin-dossier-card" id="user-dossier-${userId}">
@@ -1666,6 +1688,8 @@ function renderAdminUserGroup(group) {
           `}
         </div>
       </div>
+
+      ${renderReportCoverage(user?.reportCoverage)}
 
       <!-- Compact 4-Tile KPI Summary Grid -->
       <div class="dossier-kpi-grid">
@@ -1710,7 +1734,7 @@ function renderAdminUserGroup(group) {
 }
 
 function renderAdminIncidentItem(r, index, total, userId, reportedAlias) {
-  const isPending = r.status === 'pending';
+  const isPending = ['pending', 'reviewing'].includes(r.status);
   const createdStr = new Date(r.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   const ctx = r.context || {};
@@ -1736,7 +1760,7 @@ function renderAdminIncidentItem(r, index, total, userId, reportedAlias) {
         <div class="incident-item-tags">
           <span class="incident-index-chip">Incident #${index} of ${total}</span>
           <span class="report-status-badge ${isPending ? 'pending' : 'resolved'}">
-            ${isPending ? '● Pending Review' : `✓ Resolved (${r.actionTaken || 'dismissed'})`}
+            ${r.status === 'reviewing' ? 'In review' : r.status === 'pending' ? 'Pending review' : r.status === 'dismissed' ? 'Dismissed' : 'Resolved'}
           </span>
           <span class="report-reason-chip">
             Reason: <b>${escapeHtml(r.reason.replace(/_/g, ' '))}</b>
@@ -1836,8 +1860,8 @@ function renderAdminIncidentItem(r, index, total, userId, reportedAlias) {
         </div>
       ` : `
         <div class="admin-resolved-footer">
-          <span style="color:#16a34a;font-weight:700;">✓ Incident Resolved</span>
-          <span style="color:var(--muted);font-size:12.5px;">Action taken: <b>${escapeHtml(r.actionTaken || 'dismissed')}</b> ${r.resolvedAt ? '· ' + new Date(r.resolvedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+          <span style="color:#16a34a;font-weight:700;">${r.status === 'dismissed' ? 'Dismissed' : 'Resolved'}</span>
+          <span style="color:var(--muted);font-size:12.5px;">Action taken: <b>${escapeHtml(r.actionTaken || (r.status === 'dismissed' ? 'Dismissed' : 'Not recorded'))}</b> ${r.resolvedAt ? '· ' + new Date(r.resolvedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</span>
         </div>
       `}
     </article>
