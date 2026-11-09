@@ -1,4 +1,6 @@
 import './style.css';
+import './campus.css';
+import { ACTIVITIES, activityFor, selectPlans, planTime } from './discovery.mjs';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { io } from 'socket.io-client';
@@ -772,131 +774,99 @@ function layout(content) {
   `;
 }
 
+const discovery = { query: '', category: 'all', when: 'any', sort: 'soonest' };
+let discoverStatus = 'idle';
+
+function planLoadState() {
+  if (!state.me) return `<div class="campus-empty"><span class="campus-empty-icon">↗</span><h3>Your campus is on the other side.</h3><p>Sign in with your university email to see student plans.</p><button class="primary" onclick="go('auth')">Join your campus →</button></div>`;
+  if (discoverStatus === 'error') return `<div class="campus-empty" role="status"><span class="campus-empty-icon">↻</span><h3>We couldn’t load campus plans.</h3><p>Your connection may need a moment. Give it another try.</p><button class="primary" onclick="retryDiscover()">Try again</button></div>`;
+  if (discoverStatus === 'loading' || discoverStatus === 'idle') return `<div class="campus-empty" role="status"><span class="campus-empty-icon">✦</span><h3>Finding your next small adventure…</h3><p>Loading plans from your campus.</p></div>`;
+  return '';
+}
+
 function home() {
-  const previewRequests = state.requests.slice(0, 3);
+  const plans = selectPlans(state.requests);
+  const today = selectPlans(state.requests, { when: 'today' });
+  const date = new Date().toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
   return layout(`
-    <section class="hero">
-      <div class="hero-copy">
-        <span class="eyebrow">${(state.me?.university || 'NIIT UNIVERSITY').toUpperCase()}</span>
-        <h1>Your campus,<br><em>without the pressure.</em></h1>
-        <p>Meet people over the little things. Stay anonymous until it feels right.</p>
-        <div>
-          <button class="primary" onclick="go('discover')">Explore plans <b>→</b></button>
-          <button class="text-btn" onclick="${state.me ? "go('chat')" : "go('auth')"}">${state.me ? 'Join campus chat' : 'Sign in / Join campus ✦'}</button>
-        </div>
+    <div class="campus-topline"><span>${escapeHtml(state.me?.university || 'NIIT University')} <span class="campus-divider">/</span> THE COMMON ROOM</span><time>${date}</time></div>
+    <section class="campus-hero">
+      <div class="campus-hero-copy"><span class="eyebrow">LESS SCROLLING. MORE SHOWING UP.</span>
+        <h1>Good company.<br>Small plans.<br><em>Your kind of campus.</em></h1>
+        <p>A chai break. A study buddy. One more person for a walk.<br class="desktop-break"> Make room for the people you haven’t met yet.</p>
+        <div class="campus-actions"><button class="primary" onclick="go('discover')">Find your next plan <span>↗</span></button><button class="campus-text-action" onclick="openComposer()">Or start one yourself →</button></div>
+        <div class="campus-promise"><span>◈</span> An alias first. Your identity, when you choose.</div>
       </div>
-      <div class="orb">
-        <div>✦<small>Live<br>Campus</small></div>
-      </div>
-    </section>
-    <section class="section-head">
-      <div>
-        <h2>Happening near you</h2>
-        <p>Small plans, easy company.</p>
-      </div>
-      <button class="link" onclick="go('discover')">See all plans →</button>
-    </section>
-    <div class="request-grid">
-      ${previewRequests.length > 0 ? previewRequests.map(card).join('') : '<p class="muted">No open plans right now. Be the first to create one!</p>'}
-    </div>
-    <section class="why">
-      <div>
-        <span class="eyebrow">HOW IT WORKS</span>
-        <h2>Connection, on your terms.</h2>
-      </div>
-      <div class="steps">
-        <div>
-          <b>01</b>
-          <h3>Stay anonymous</h3>
-          <p>Use a rotating alias. Your real identity is yours to share, when you choose.</p>
-        </div>
-        <div>
-          <b>02</b>
-          <h3>Find your people</h3>
-          <p>Say yes to a plan that feels like you — nothing more.</p>
-        </div>
-        <div>
-          <b>03</b>
-          <h3>Meet safely</h3>
-          <p>Public places, mutual consent, and safety built in.</p>
-        </div>
+      <div class="campus-board" aria-label="A few ideas for your next campus plan">
+        <span class="board-caption">THE BEST PLANS START SMALL</span>
+        <div class="board-orbit" aria-hidden="true"></div>
+        <button class="idea-note note-coffee" onclick="startPlanIdea('coffee')"><span>01 / TAKE A BREAK</span><strong>Chai?<br>Chai.</strong><small>Good conversation, no agenda. ↗</small><i aria-hidden="true">☕</i></button>
+        <button class="idea-note note-study" onclick="startPlanIdea('study')"><span>02 / FIND YOUR FOCUS</span><strong>Same deadline.<br>Better company.</strong><small>Find a study buddy ↗</small></button>
+        <button class="idea-note note-walk" onclick="startPlanIdea('move')"><span>03 / STEP OUTSIDE</span><strong>A walk.<br>A fresh perspective.</strong><small>Start something simple ↗</small><i aria-hidden="true">↝</i></button>
+        <div class="board-stamp" aria-hidden="true">made for<br><b>real life.</b><span>✳</span></div>
       </div>
     </section>
+    <section class="campus-intents" aria-label="Plan ideas">${ACTIVITIES.slice(1).map(a=>`<button onclick="browseActivity('${a.id}')"><span class="intent-icon intent-${a.id}">${a.icon}</span><span>${a.label}<small>Find your kind of company</small></span><b>↗</b></button>`).join('')}</section>
+    <section class="section-head campus-section-heading"><div><span class="eyebrow">A LITTLE LESS “MAYBE SOMEDAY”</span><h2>Make today a little different.</h2><p>${discoverStatus === 'ready' && state.me ? `${today.length} ${today.length === 1 ? 'plan' : 'plans'} today · ${plans.length} upcoming on your campus` : 'Small invitations. A good place to start.'}</p></div><button class="link" onclick="go('discover')">Explore all plans ↗</button></section>
+    <div class="request-grid campus-plan-grid">${planLoadState() || (plans.length ? plans.slice(0,3).map(card).join('') : `<div class="campus-empty"><span class="campus-empty-icon">✳</span><h3>Someone has to make the first move.</h3><p>A quiet campus feed is a blank page. Invite someone to your next coffee break.</p><button class="primary" onclick="startPlanIdea('coffee')">Start a small plan →</button></div>`)}</div>
+    <section class="campus-chat-invite"><div class="chat-invite-icon" aria-hidden="true">“</div><div><span class="eyebrow">NOT READY TO MAKE A PLAN?</span><h2>Start with a hello.</h2><p>Drop into campus chat. Ask a question, share a thought, find a familiar voice.</p></div><button class="primary" onclick="go('chat')">Open campus chat ↗</button></section>
+    <section class="campus-how"><div><span class="eyebrow">YOUR PACE. YOUR PEOPLE.</span><h2>Meeting someone<br>should feel this easy.</h2><button class="link" onclick="go('safety')">Read our safety guide ↗</button></div><ol><li><span>01</span><div><h3>Show up as yourself. Keep your name.</h3><p>Your public alias is how other students meet you.</p></div></li><li><span>02</span><div><h3>Find a shared little thing.</h3><p>Express interest in a plan. When the host accepts, you get a private conversation.</p></div></li><li><span>03</span><div><h3>Take it offline, on your terms.</h3><p>Choose a public campus spot. Sharing your identity takes mutual consent.</p></div></li></ol></section>
+    <footer class="campus-footer"><span>✦ afterclass</span><span>For the life between lectures.</span></footer>
   `);
 }
 
 function card(r) {
   const isMine = state.me && r.host?.username === state.me.username;
   const hasApplied = Boolean(r.hasApplied);
-  const isSaved = state.savedPlanIds && state.savedPlanIds.has(r.id);
-  const formattedDate = r.scheduledAt ? new Date(r.scheduledAt).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Soon';
-  return `
-    <article class="plan-card">
-      <div class="plan-top">
-        <span class="emoji">✦</span>
-        <button type="button" class="plan-bookmark-btn ${isSaved ? 'saved' : ''}" onclick="toggleSavePlan('${r.id}', event)" title="${isSaved ? 'Remove bookmark' : 'Bookmark plan'}">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="${isSaved ? '#244d42' : 'none'}" stroke="${isSaved ? '#244d42' : 'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
-          </svg>
-        </button>
-      </div>
-      <h3>${r.activity}</h3>
-      <div class="plan-host-row">${avatar(r.host?.username || 'Student', false)} <span>by <b>${r.host?.username || 'Student'}</b></span></div>
-      <p class="muted">⌖ ${r.location || 'Campus'} · ${formattedDate}</p>
-      <div class="tags">
-        <span>Campus plan</span>
-      </div>
-      <footer>
-        <span>${isMine ? 'Your plan' : 'Verified host'}</span>
-        ${isMine
-          ? `<span class="muted">Hosted by you</span>`
-          : (hasApplied
-              ? `<button class="applied-btn" disabled>Interest sent ✓</button>`
-              : `<button onclick="joinPlan('${r.id}', '${r.activity.replace(/'/g, "\\'")}')">I’m interested</button>`)}
-      </footer>
-    </article>
-  `;
+  const isSaved = state.savedPlanIds?.has(r.id);
+  const activity = activityFor(r);
+  const id = escapeHtml(String(r.id));
+  return `<article class="plan-card campus-plan-card" data-category="${activity.id}">
+    <div class="plan-top"><span class="plan-category"><span>${activity.icon}</span>${activity.label}</span><button type="button" class="plan-bookmark-btn ${isSaved ? 'saved' : ''}" data-save-plan="${id}" aria-label="${isSaved ? 'Unsave' : 'Save'} ${escapeHtml(r.activity)}" aria-pressed="${Boolean(isSaved)}"><svg width="18" height="18" viewBox="0 0 24 24" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.7"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button></div>
+    <time class="plan-time" datetime="${escapeHtml(r.scheduledAt)}">${planTime(r.scheduledAt)}</time>
+    <h3>${escapeHtml(r.activity)}</h3><p class="plan-location">⌖ ${escapeHtml(r.location || 'Campus')}</p>
+    <div class="plan-host-row">${avatar(r.host?.username || 'Student')}<span>Hosted by <b>${escapeHtml(r.host?.username || 'Student')}</b></span></div>
+    <footer><span>${isMine ? 'Your invitation' : 'Start with a shared plan'}</span>${isMine ? `<button class="campus-text-action" onclick="go('inbox')">Manage →</button>` : hasApplied ? '<button class="applied-btn" disabled>Interest sent ✓</button>' : `<button data-join-plan="${id}">I’m interested ↗</button>`}</footer>
+  </article>`;
+}
+
+function discoveryResults() {
+  const status = planLoadState();
+  if (status) return status;
+  const displayed = selectPlans(state.requests, { ...discovery, savedOnly: state.discoverFilter === 'saved', savedIds: state.savedPlanIds });
+  if (!displayed.length) return `<div class="campus-empty"><span class="campus-empty-icon">✳</span><h3>${state.discoverFilter === 'saved' ? 'Keep a little possibility for later.' : 'Your next plan could start with you.'}</h3><p>${state.discoverFilter === 'saved' ? 'Bookmark a plan to find it here. Only upcoming plans appear.' : 'No upcoming plans match these filters. Try a broader search or put out an invitation.'}</p><div class="campus-actions"><button class="primary" onclick="openComposer()">Create a plan</button><button class="campus-text-action" onclick="resetDiscovery()">Reset filters</button></div></div>`;
+  return displayed.map(card).join('');
+}
+
+function discoveryCount() {
+  if (discoverStatus !== 'ready') return '';
+  const count = selectPlans(state.requests, { ...discovery, savedOnly: state.discoverFilter === 'saved', savedIds: state.savedPlanIds }).length;
+  return `${count} ${count === 1 ? 'plan' : 'plans'} to make room for`;
 }
 
 function discover() {
   const filter = state.discoverFilter || 'all';
-  const allRequests = state.requests || [];
-  const savedRequests = allRequests.filter(r => state.savedPlanIds && state.savedPlanIds.has(r.id));
-  const displayed = filter === 'saved' ? savedRequests : allRequests;
-
-  return layout(`
-    <section class="page-title">
-      <span class="eyebrow">MAKE A SMALL PLAN</span>
-      <h1>Find a reason to get out.</h1>
-      <p>Everything here is hosted by a verified student, and everyone starts anonymous.</p>
-    </section>
-    <div class="filters">
-      <button type="button" class="${filter === 'all' ? 'selected' : ''}" onclick="setDiscoverFilter('all')">All plans (${allRequests.length})</button>
-      <button type="button" class="${filter === 'saved' ? 'selected' : ''}" onclick="setDiscoverFilter('saved')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="${filter === 'saved' ? '#ffffff' : 'none'}" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
-        Saved (${savedRequests.length})
-      </button>
-    </div>
-    <div class="request-grid all">
-      ${displayed.length > 0 ? displayed.map(card).join('') : (filter === 'saved' ? `
-        <div class="empty-inbox" style="grid-column: 1 / -1; padding: 40px 20px;">
-          <div style="width:48px;height:48px;border-radius:50%;background:#edf4ea;color:#244d42;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
-          </div>
-          <h2>No saved plans yet.</h2>
-          <p>Tap the bookmark icon on any campus plan card to save it here for later.</p>
-          <button class="primary" onclick="setDiscoverFilter('all')" style="margin-top: 10px;">Explore All Plans →</button>
-        </div>
-      ` : '')}
-      <article class="create-card" onclick="openComposer()">
-        <span>＋</span>
-        <h3>Have an idea?</h3>
-        <p>Put out a low-pressure invite.</p>
-        <button>Create a plan →</button>
-      </article>
-    </div>
-  `);
+  return layout(`<div class="campus-topline"><span>YOUR CAMPUS <span class="campus-divider">/</span> SMALL POSSIBILITIES</span><button class="campus-text-action" onclick="go('home')">← Common room</button></div>
+    <section class="discovery-heading"><div><span class="eyebrow">FIND YOUR KIND OF COMPANY</span><h1>Less “we should.”<br><em>More “see you there.”</em></h1><p>Pick a shared interest. Say hello. See where a small plan takes you.</p></div><button class="primary" onclick="openComposer()">＋ Create a plan</button></section>
+    <section class="discovery-tools" aria-label="Filter campus plans"><div class="discovery-search-row"><label class="discovery-search"><span aria-hidden="true">⌕</span><input type="search" id="plan-search" value="${escapeHtml(discovery.query)}" placeholder="Try chai, library, badminton…" aria-label="Search activities or locations" oninput="searchCampusPlans(this.value)"></label><label class="discovery-select">When<select onchange="setPlanOption('when',this.value)">${[['any','Any time'],['today','Today'],['tomorrow','Tomorrow'],['week','Next 7 days']].map(([v,l])=>`<option value="${v}" ${discovery.when===v?'selected':''}>${l}</option>`).join('')}</select></label></div>
+    <div class="activity-filters" role="group" aria-label="Activity type">${ACTIVITIES.map(a=>`<button aria-pressed="${discovery.category===a.id}" class="${discovery.category===a.id?'selected':''}" onclick="setPlanOption('category','${a.id}')">${a.icon} ${a.label}</button>`).join('')}</div></section>
+    <div class="discovery-results-bar"><div class="discovery-tabs"><button class="${filter==='all'?'selected':''}" aria-pressed="${filter==='all'}" onclick="setDiscoverFilter('all')">All plans</button><button class="${filter==='saved'?'selected':''}" aria-pressed="${filter==='saved'}" onclick="setDiscoverFilter('saved')">Saved for later</button></div><label class="discovery-sort">Sort by<select aria-label="Sort plans" onchange="setPlanOption('sort',this.value)"><option value="soonest" ${discovery.sort==='soonest'?'selected':''}>Happening soonest</option><option value="newest" ${discovery.sort==='newest'?'selected':''}>Recently posted</option></select></label></div>
+    <p class="discovery-count" id="discovery-count" aria-live="polite">${discoveryCount()}</p><div class="request-grid all campus-plan-grid" id="discovery-results">${discoveryResults()}</div>
+    <div class="discovery-nudge"><span>Can’t find your kind of plan?</span><button class="campus-text-action" onclick="openComposer()">Someone else might be waiting for you to start it. ↗</button></div>`);
 }
+
+window.browseActivity = category => { discovery.category = category; state.discoverFilter = 'all'; go('discover'); };
+window.startPlanIdea = category => { openComposer(); const idea = ACTIVITIES.find(a=>a.id===category); if (idea?.prompt) window.selectQuickActivity(idea.prompt); };
+window.searchCampusPlans = query => { discovery.query = query; document.querySelector('#discovery-results').innerHTML = discoveryResults(); document.querySelector('#discovery-count').textContent = discoveryCount(); };
+window.setPlanOption = (key,value) => { if (['category','when','sort'].includes(key)) discovery[key]=value; render(); };
+window.resetDiscovery = () => { Object.assign(discovery,{query:'',category:'all',when:'any',sort:'soonest'}); state.discoverFilter='all'; render(); };
+window.retryDiscover = () => loadDiscover();
+document.addEventListener('click', event => {
+  const save = event.target.closest('[data-save-plan]');
+  if (save) { window.toggleSavePlan(save.dataset.savePlan,event); return; }
+  const join = event.target.closest('[data-join-plan]');
+  if (join) { const plan=state.requests.find(p=>p.id===join.dataset.joinPlan); if (plan) window.joinPlan(plan.id,plan.activity); }
+});
 
 function chat() {
   setTimeout(() => {
@@ -5091,15 +5061,23 @@ async function loadMe() {
 let discoverLoading = false;
 async function loadDiscover() {
   if (discoverLoading) return;
+  if (!state.me) return;
   discoverLoading = true;
+  discoverStatus = 'loading';
+  if (state.view === 'discover' || state.view === 'home') render();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
   try {
-    const data = await api('/match-requests');
-    state.requests = data.requests || [];
-    if (state.view === 'discover' || state.view === 'home') render();
+    const data = await api('/match-requests', { signal: controller.signal });
+    if (!Array.isArray(data.requests)) throw new Error('Invalid plans response');
+    state.requests = data.requests;
+    discoverStatus = 'ready';
   } catch {
-    // Keep existing
+    discoverStatus = 'error';
   } finally {
+    clearTimeout(timeout);
     discoverLoading = false;
+    if (state.view === 'discover' || state.view === 'home') render();
   }
 }
 
