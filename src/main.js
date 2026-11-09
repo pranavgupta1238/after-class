@@ -7,6 +7,7 @@ import './theme.css';
 import './workspace.css';
 import './cards.css';
 import './messaging.css';
+import './forms.css';
 import { createAdminLoader } from './admin-loader.mjs';
 import { ACTIVITIES, activityFor, selectPlans, planTime } from './discovery.mjs';
 import 'leaflet/dist/leaflet.css';
