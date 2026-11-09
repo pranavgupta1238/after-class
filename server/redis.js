@@ -82,6 +82,25 @@ async function getOtp(email) {
   }
 }
 
+// Read independent cached entries in one round trip (chat reaction history).
+async function getOtpBatch(keys) {
+  if (!keys.length) return [];
+  let values = [];
+  try {
+    const connection = getClient();
+    if (connection) values = await connection.mget(...keys.map(key => OTP_PREFIX + key));
+  } catch {}
+  return keys.map((key, index) => {
+    if (values[index]) {
+      try { return JSON.parse(values[index]); } catch {}
+    }
+    const entry = otpFallback.get(key);
+    if (entry && entry.expiresAt > Date.now()) return entry;
+    otpFallback.delete(key);
+    return null;
+  });
+}
+
 async function delOtp(email) {
   try {
     otpFallback.delete(email);
@@ -175,6 +194,7 @@ module.exports = {
   limit,
   setOtp,
   getOtp,
+  getOtpBatch,
   delOtp,
   ping,
   getModeratorEmails,

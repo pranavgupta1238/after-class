@@ -91,10 +91,17 @@ async function getReactions(messageId, currentUserId) {
 async function getBatchReactions(messageIds, currentUserId) {
   const result = {};
   if (!Array.isArray(messageIds) || messageIds.length === 0) return result;
-
-  for (const id of messageIds) {
-    result[id] = await getReactions(id, currentUserId);
-  }
+  const missing = [...new Set(messageIds)].filter(id => getMemoryReactions(id).size === 0);
+  const cached = missing.length ? await redis.getOtpBatch(missing.map(id => 'msg_reactions:' + id)) : [];
+  missing.forEach((id, index) => {
+    const map = getMemoryReactions(id);
+    if (cached[index] && typeof cached[index] === 'object') {
+      for (const [emoji, users] of Object.entries(cached[index])) {
+        if (ALLOWED_EMOJIS.includes(emoji) && Array.isArray(users)) map.set(emoji, new Set(users));
+      }
+    }
+  });
+  for (const id of messageIds) result[id] = formatReactions(getMemoryReactions(id), currentUserId);
   return result;
 }
 
