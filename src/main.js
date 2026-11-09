@@ -1,5 +1,6 @@
 import './style.css';
 import './campus.css';
+import './experience.css';
 import { ACTIVITIES, activityFor, selectPlans, planTime } from './discovery.mjs';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -475,7 +476,7 @@ function renderCampusMessageHtml(m) {
       <div class="swipe-reply-cue">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
       </div>
-      <div class="message" data-msg-id="${msgId}" data-sender="${safeName}" data-text="${safeText}">
+      <div class="message ${isMine ? 'is-mine' : ''}" data-msg-id="${msgId}" data-sender="${safeName}" data-text="${safeText}">
         ${avatar(name)}
         <div class="message-content-col">
           <b>${name}</b><small>${time}${isMine ? ' <span class="tick delivered" title="Delivered">✓✓</span>' : ''}</small>
@@ -727,54 +728,27 @@ window.dismissWarningNotice = () => {
 
 function layout(content) {
   const me = state.me;
-  const nav = [
-    ['home', 'Home'],
-    ['chat', 'Campus chat'],
-    ['discover', 'Discover'],
-    ['inbox', 'Inbox'],
-    ['safety', 'Safety'],
-    ['settings', 'Settings']
-  ];
-  if (me?.isAdmin) {
-    nav.push(['admin', 'Admin Portal']);
-  }
-  const username = me?.username || 'Anonymous';
+  const nav = [['home','Home','Home'],['discover','Discover','Explore'],['chat','Campus chat','Chat'],['inbox','Inbox','Inbox'],['safety','Trust & safety','Safety'],['settings','Your space','You']];
+  if (me?.isAdmin) nav.push(['admin','Moderation','Admin']);
+  const username = me?.username || 'Your campus awaits';
   const campusName = me?.university || 'NIIT University';
-  const inboxCount = (state.matches.length + state.pendingApplications.length) || 0;
-  const pendingAdminReports = (state.adminReports || []).filter(r => r.status === 'pending').length;
-
+  const inboxCount = state.pendingApplications.length;
+  const currentLabel = nav.find(([key])=>key===state.view)?.[1] || 'Your campus';
   return `
-    <div class="shell ${state.view === 'chat' ? 'chat-shell' : ''}">
-      <aside>
-        <a class="brand" href="#" onclick="go('home')"><i>✦</i> afterclass</a>
-        <div class="campus">YOUR CAMPUS <b>${campusName}</b></div>
-        <nav>
-          ${nav.map(([key, label]) => `
-            <button type="button" class="${state.view === key ? 'active' : ''}" onclick="go('${key}')">
-              <span>${icons[key] || '◈'}</span>${label}
-              ${key === 'inbox' && inboxCount > 0 ? `<em>${inboxCount}</em>` : ''}
-              ${key === 'admin' && pendingAdminReports > 0 ? `<em class="admin-nav-counter">${pendingAdminReports}</em>` : ''}
-            </button>
-          `).join('')}
-        </nav>
-        <div class="sidebar-bottom" onclick="${me ? 'openAvatarPreview()' : "go('auth')"}" style="cursor:pointer;" title="${me ? (me.isVerified ? 'Verified Student Profile' : 'Unverified Student Profile') : 'Sign in / Join'}">
-          ${avatar(me?.avatarConfig || username, false, Boolean(me?.isVerified))}
-          <div>
-            <strong style="display:inline-flex;align-items:center;gap:4px;">
-              ${username}
-              ${me?.isVerified ? renderVerifiedBadgeSvg(13) : ''}
-            </strong>
-            <small>${me ? (me.isVerified ? 'verified student ✦' : (me?.verificationStatus === 'pending' ? 'under verification ⏳' : 'unverified student')) : 'sign in / join →'}</small>
-          </div>
-        </div>
+    <div class="shell experience-shell ${state.view === 'chat' ? 'chat-shell' : ''}">
+      <a class="skip-content" href="#main-content">Skip to content</a>
+      <aside class="experience-sidebar">
+        <a class="brand" href="/" onclick="event.preventDefault();go('home')"><i>✦</i> afterclass<span class="brand-period">.</span></a>
+        <div class="campus"><span>YOUR LITTLE CORNER</span><b>${escapeHtml(campusName)}</b><small>Campus community</small></div>
+        <nav aria-label="Main navigation">${nav.map(([key,label,mobile])=>`<button type="button" data-nav="${key}" class="${state.view===key?'active':''}" ${state.view===key?'aria-current="page"':''} aria-label="${label}" onclick="go('${key}')"><span class="nav-icon" aria-hidden="true">${icons[key]||'◈'}</span><span class="nav-label">${label}</span><span class="nav-mobile-label">${mobile}</span>${key==='inbox'&&inboxCount?`<em aria-label="${inboxCount} incoming interests">${inboxCount}</em>`:''}</button>`).join('')}</nav>
+        <div class="sidebar-invitation"><span aria-hidden="true">✳</span><p>A small plan.<br>A new possibility.</p><button onclick="openComposer()">Make the first move <b>↗</b></button></div>
+        <button class="sidebar-bottom" onclick="${me?'openAvatarPreview()':"go('auth')"}" aria-label="${me?'Open your profile':'Join your campus'}">${avatar(me?.avatarConfig||username,false,Boolean(me?.isVerified))}<span class="sidebar-profile-copy"><strong>${escapeHtml(username)}</strong><small>${me?(me.isVerified?'Verified student': 'Student profile'):'Sign in to get started'}</small></span><span class="profile-chevron" aria-hidden="true">↗</span></button>
       </aside>
-      <main class="${state.view === 'chat' ? 'chat-main' : ''}">
-        ${renderWarnedStudentBanner()}
-        ${content}
+      <main id="main-content" tabindex="-1" class="${state.view==='chat'?'chat-main':''}">
+        <div class="experience-toolbar"><div class="toolbar-location"><span class="toolbar-symbol" aria-hidden="true">✳</span><span>${currentLabel}<small>${escapeHtml(campusName)}</small></span></div><a class="mobile-wordmark" href="/" onclick="event.preventDefault();go('home')">✦ afterclass<span>.</span></a><div class="toolbar-actions"><button class="toolbar-safety" aria-label="Trust and safety" onclick="go('safety')">${icons.safety}</button><button class="toolbar-create" aria-label="Create a plan" onclick="openComposer()"><span aria-hidden="true">＋</span><span class="toolbar-create-label">New plan</span></button><button class="toolbar-profile" aria-label="Open your profile" onclick="${me?'openAvatarPreview()':"go('auth')"}">${avatar(me?.avatarConfig||username,true,Boolean(me?.isVerified))}</button></div></div>
+        ${renderWarnedStudentBanner()}${content}
       </main>
-    </div>
-    <div id="toast" class="toast ${state.toast ? 'show' : ''}">${state.toast}</div>
-  `;
+    </div><div id="toast" role="status" aria-live="polite" class="toast ${state.toast?'show':''}">${escapeHtml(state.toast)}</div>`;
 }
 
 const discovery = { query: '', category: 'all', when: 'any', sort: 'soonest' };
@@ -811,7 +785,7 @@ function home() {
     </section>
     <section class="campus-intents" aria-label="Plan ideas">${ACTIVITIES.slice(1).map(a=>`<button onclick="browseActivity('${a.id}')"><span class="intent-icon intent-${a.id}">${a.icon}</span><span>${a.label}<small>Find your kind of company</small></span><b>↗</b></button>`).join('')}</section>
     <section class="section-head campus-section-heading"><div><span class="eyebrow">A LITTLE LESS “MAYBE SOMEDAY”</span><h2>Make today a little different.</h2><p>${discoverStatus === 'ready' && state.me ? `${today.length} ${today.length === 1 ? 'plan' : 'plans'} today · ${plans.length} upcoming on your campus` : 'Small invitations. A good place to start.'}</p></div><button class="link" onclick="go('discover')">Explore all plans ↗</button></section>
-    <div class="request-grid campus-plan-grid">${planLoadState() || (plans.length ? plans.slice(0,3).map(card).join('') : `<div class="campus-empty"><span class="campus-empty-icon">✳</span><h3>Someone has to make the first move.</h3><p>A quiet campus feed is a blank page. Invite someone to your next coffee break.</p><button class="primary" onclick="startPlanIdea('coffee')">Start a small plan →</button></div>`)}</div>
+    <div class="request-grid campus-plan-grid">${planLoadState() || (plans.length ? plans.slice(0,3).map(card).join('') + (plans.length < 3 ? `<button class="campus-start-card ${plans.length===1?'wide':''}" onclick="openComposer()"><span class="eyebrow">THERE’S ROOM FOR YOUR IDEA</span><strong>Someone’s kind of plan<br>could be yours.</strong><span class="start-card-cta">Put out a little invitation <b>↗</b></span><i aria-hidden="true">✳</i></button>` : '') : `<div class="campus-empty"><span class="campus-empty-icon">✳</span><h3>Someone has to make the first move.</h3><p>A quiet campus feed is a blank page. Invite someone to your next coffee break.</p><button class="primary" onclick="startPlanIdea('coffee')">Start a small plan →</button></div>`)}</div>
     <section class="campus-chat-invite"><div class="chat-invite-icon" aria-hidden="true">“</div><div><span class="eyebrow">NOT READY TO MAKE A PLAN?</span><h2>Start with a hello.</h2><p>Drop into campus chat. Ask a question, share a thought, find a familiar voice.</p></div><button class="primary" onclick="go('chat')">Open campus chat ↗</button></section>
     <section class="campus-how"><div><span class="eyebrow">YOUR PACE. YOUR PEOPLE.</span><h2>Meeting someone<br>should feel this easy.</h2><button class="link" onclick="go('safety')">Read our safety guide ↗</button></div><ol><li><span>01</span><div><h3>Show up as yourself. Keep your name.</h3><p>Your public alias is how other students meet you.</p></div></li><li><span>02</span><div><h3>Find a shared little thing.</h3><p>Express interest in a plan. When the host accepts, you get a private conversation.</p></div></li><li><span>03</span><div><h3>Take it offline, on your terms.</h3><p>Choose a public campus spot. Sharing your identity takes mutual consent.</p></div></li></ol></section>
     <footer class="campus-footer"><span>✦ afterclass</span><span>For the life between lectures.</span></footer>
@@ -877,14 +851,14 @@ function chat() {
     renderReplyBar();
   }, 0);
   const username = state.me?.username || 'Anonymous';
-  const online = state.campusOnlineCount || 18;
+  const online = state.campusOnlineCount ?? '—';
   return layout(`
     <section class="chat-layout">
       <div class="chat-panel">
         <div class="chat-title">
           <div>
             <span class="eyebrow">CAMPUS SPACE</span>
-            <h2>${state.me?.university || 'NIIT University'} chat <span class="campus-live-badge clickable" onclick="openCampusMembersModal()" title="View who all joined this group" role="button" tabindex="0"><i class="live-pulse-dot"></i> <b id="campus-online-count">${online}</b> online</span></h2>
+            <h2>${state.me?.university || 'NIIT University'} chat <button type="button" class="campus-live-badge clickable" onclick="openCampusMembersModal()" title="View campus members"><i class="live-pulse-dot"></i> <b id="campus-online-count">${online}</b> online</button></h2>
             <p>Say hi. Keep it kind. Be human.</p>
           </div>
           <div class="chat-title-actions">
@@ -912,7 +886,7 @@ function chat() {
               <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:240px;color:var(--muted);gap:8px;text-align:center;padding:20px;">
                 <div style="width:46px;height:46px;border-radius:50%;background:#eef4ec;color:#244d42;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:2px;">💬</div>
                 <div style="font:600 16px 'Playfair Display';color:var(--ink);">Start the conversation</div>
-                <div style="font-size:12.5px;color:var(--muted);max-width:280px;line-height:1.45;">No recent messages in the last 7 days. Say hello to campus below — your identity stays completely private!</div>
+                <div style="font-size:12.5px;color:var(--muted);max-width:280px;line-height:1.45;">A shared space for your campus. Ask a question or be the first to say hello.</div>
               </div>
             `
           )}
@@ -944,16 +918,16 @@ function inbox() {
   return layout(`
     <section class="page-title compact">
       <span class="eyebrow">YOUR CONNECTIONS & PLANS</span>
-      <h1>Inbox</h1>
-      <p>Manage your 1-on-1 private conversations and active campus plans.</p>
+      <h1>A little closer.</h1>
+      <p>Your conversations, shared plans, and next possibilities.</p>
     </section>
 
     <div class="inbox-tabs">
       <button type="button" class="${activeTab === 'matches' ? 'active' : ''}" onclick="setInboxTab('matches')">
-        Active Matches (${state.matches.length})
+        Conversations <span class="inbox-tab-count">${state.matches.length}</span>
       </button>
       <button type="button" class="${activeTab === 'my-plans' ? 'active' : ''}" onclick="setInboxTab('my-plans')">
-        My Posted Plans (${myPlansCount})
+        Your plans <span class="inbox-tab-count">${myPlansCount}</span>
       </button>
     </div>
 
@@ -995,7 +969,7 @@ function inbox() {
       ${state.matches.length === 0 && state.pendingApplications.length === 0 ? `
         <div class="empty-inbox">
           <span>✦</span>
-          <h2>Keep it easy.</h2>
+          <h2>Every connection starts somewhere.</h2>
           <p>When someone accepts your interest or you accept theirs, your private chat will appear here.</p>
           <button class="primary" onclick="go('discover')">Explore plans</button>
         </div>
@@ -2456,8 +2430,8 @@ function settings() {
   return layout(`
     <section class="page-title compact">
       <span class="eyebrow">PREFERENCES & IDENTITY</span>
-      <h1>Settings</h1>
-      <p>Manage your campus standing, live push alerts, audio sound effects, and active device sessions.</p>
+      <h1>Make yourself at home.</h1>
+      <p>Your identity, your preferences, your corner of campus.</p>
     </section>
 
     <div class="settings-grid" style="display:grid;gap:20px;margin-top:28px;max-width:820px;">
@@ -2746,9 +2720,6 @@ function authPage() {
 
   return `
     <div class="auth-page-wrapper">
-      <canvas id="auth-blob-canvas"></canvas>
-      <div class="auth-ambient-grid-overlay"></div>
-
       <!-- Top Navigation Bar -->
       <header class="auth-top-nav">
         <a class="auth-brand-logo" href="#" onclick="go('home')">
@@ -2763,193 +2734,19 @@ function authPage() {
       <!-- Main Grid Container -->
       <main class="auth-main-grid ${step !== 'welcome' ? 'is-focused-flow' : ''}">
         ${step === 'welcome' ? `
-        <!-- LEFT: Showcase Deck -->
-        <div class="auth-left-showcase">
-          <span class="auth-eyebrow-chip">✦ 100% ANONYMOUS CAMPUS NETWORK</span>
-          <h1 class="auth-hero-headline">
-            Speak freely. Meet up.<br>
-            <em>Never spend campus time alone.</em>
-          </h1>
-          <p class="auth-hero-lead">
-            The private social network built exclusively for verified college students. Voice thoughts openly in campus chat, hang out with study or coffee partners, and jump into spontaneous activities.
-          </p>
-
-          <!-- 3-Pill Interactive Tab Switcher -->
-          <div class="auth-deck-nav" role="tablist">
-            <button type="button" class="auth-deck-tab active" data-tab="chat" onclick="switchAuthShowcase('chat')">
-              💬 Campus Chat
-            </button>
-            <button type="button" class="auth-deck-tab" data-tab="pairing" onclick="switchAuthShowcase('pairing')">
-              👫 Find Company
-            </button>
-            <button type="button" class="auth-deck-tab" data-tab="plans" onclick="switchAuthShowcase('plans')">
-              ⚡ Spontaneous Plans
-            </button>
+        <div class="auth-left-showcase editorial-welcome">
+          <span class="welcome-overline"><span></span> FOR THE LIFE BETWEEN LECTURES</span>
+          <h1>Strangers today.<br><em>Your people<br>tomorrow.</em></h1>
+          <p class="welcome-description">The best part of campus isn’t on your timetable. <br>Find it in a little conversation, a shared interest, <br>or a plan you almost didn’t make.</p>
+          <div class="welcome-art" aria-label="A simple idea: turn a hello into a shared campus plan">
+            <div class="welcome-orbit" aria-hidden="true"></div>
+            <div class="welcome-avatar avatar-one" aria-hidden="true">${renderAvatarSvg('VelvetOtter',72)}</div>
+            <div class="welcome-avatar avatar-two" aria-hidden="true">${renderAvatarSvg('SunnyFox',72)}</div>
+            <div class="welcome-note"><span>A SMALL INVITATION</span><strong>One coffee.<br>Two stories.</strong><div><span>☕</span><small>Somewhere on campus.<br>Whenever you’re ready.</small></div></div>
+            <div class="welcome-hello">It starts with <em>hello.</em><span>↗</span></div>
+            <span class="welcome-art-caption">LESS PRESSURE. MORE POSSIBILITY.</span>
           </div>
-
-          <!-- Viewport containing the 3 clean showcase panels -->
-          <div class="auth-deck-viewport">
-            <!-- Panel 1: Campus Chat -->
-            <div id="auth-panel-chat" class="auth-card-panel active">
-              <div class="auth-chat-preview-header">
-                <span class="auth-chat-title">
-                  <span>#general-campus-chat</span>
-                  <span style="color:#4ade80;font-size:11px;">● 31 active now</span>
-                </span>
-                <span class="auth-chat-badge-safe">🛡️ 100% Anonymous · Real names sealed</span>
-              </div>
-              <div class="auth-chat-messages">
-                <div class="auth-chat-bubble-row">
-                  <div class="auth-chat-avatar-wrap">${renderAvatarSvg('VelvetOtter', 34)}</div>
-                  <div class="auth-chat-bubble-body">
-                    <div class="auth-chat-bubble-meta">
-                      <span class="auth-chat-bubble-author">VelvetOtter ✦</span>
-                      <span class="auth-chat-bubble-time">10m ago</span>
-                    </div>
-                    <p class="auth-chat-bubble-text">Is the library 2nd floor AC working fine today? Trying to focus before midsems 📚</p>
-                    <div class="auth-chat-reactions">
-                      <span class="auth-reaction-pill">❄️ 6</span>
-                      <span class="auth-reaction-pill">👍 4</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="auth-chat-bubble-row is-me">
-                  <div class="auth-chat-avatar-wrap">${renderAvatarSvg('BraveFalcon', 34)}</div>
-                  <div class="auth-chat-bubble-body">
-                    <div class="auth-chat-bubble-meta">
-                      <span class="auth-chat-bubble-author">BraveFalcon ✦</span>
-                      <span class="auth-chat-bubble-time">8m ago</span>
-                    </div>
-                    <p class="auth-chat-bubble-text">Yeah chilling here right now, 18°C and super quiet! Plenty of seats open 🙌</p>
-                    <div class="auth-chat-reactions">
-                      <span class="auth-reaction-pill">❤️ 9</span>
-                      <span class="auth-reaction-pill">🔥 3</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="auth-chat-bubble-row">
-                  <div class="auth-chat-avatar-wrap">${renderAvatarSvg('SunnyFox', 34)}</div>
-                  <div class="auth-chat-bubble-body">
-                    <div class="auth-chat-bubble-meta">
-                      <span class="auth-chat-bubble-author">SunnyFox ✦</span>
-                      <span class="auth-chat-bubble-time">2m ago</span>
-                    </div>
-                    <p class="auth-chat-bubble-text">Anyone down for a quick Nescafe iced coffee run before the 4 PM lecture? ☕</p>
-                    <div class="auth-chat-reactions">
-                      <span class="auth-reaction-pill">☕ 7</span>
-                      <span class="auth-reaction-pill">👀 5</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div class="auth-chat-input-fake">
-                <span>💬 Say anything freely... Your identity is 100% protected</span>
-                <span>↵</span>
-              </div>
-            </div>
-
-            <!-- Panel 2: Find Company & Pair Up -->
-            <div id="auth-panel-pairing" class="auth-card-panel">
-              <div class="auth-chat-preview-header">
-                <span class="auth-chat-title" style="color:#fda4af;">
-                  <span>👫 Spontaneous Companionship</span>
-                  <span style="font-size:11px;color:#f472b6;">● Free time? Never sit alone</span>
-                </span>
-                <span class="auth-chat-badge-safe" style="color:#fbcfe8;background:rgba(244,114,182,.12);border:1px solid rgba(244,114,182,.25);">
-                  ✨ Safe & Friendly Matching
-                </span>
-              </div>
-
-              <div class="auth-pair-card">
-                <div class="auth-pair-top">
-                  <div class="auth-pair-profile">
-                    <div class="auth-pair-avatar">${renderAvatarSvg('MidnightStar', 38)}</div>
-                    <div>
-                      <div class="auth-pair-author">MidnightStar ✦ <span style="color:#a6d8b8;font-size:11px;">✓ Student</span></div>
-                      <div class="auth-pair-time">Free between 4:00 PM – 6:30 PM (Lecture gap)</div>
-                    </div>
-                  </div>
-                  <span class="auth-pair-status-badge">Looking for Company</span>
-                </div>
-                <p class="auth-pair-text">"Got a long break before lab. Looking for someone (anyone or opposite gender) to grab an iced coffee at Central Cafe or take a walk around the amphitheater!"</p>
-                <div class="auth-pair-footer">
-                  <div class="auth-pair-tags">
-                    <span class="auth-pair-tag">☕ Cafe Chill</span>
-                    <span class="auth-pair-tag">🚶 Campus Walk</span>
-                    <span class="auth-pair-tag">👫 Friendly Pair Up</span>
-                  </div>
-                  <span class="auth-pair-action-btn">Connect Anonymously →</span>
-                </div>
-              </div>
-
-              <div class="auth-pair-card">
-                <div class="auth-pair-top">
-                  <div class="auth-pair-profile">
-                    <div class="auth-pair-avatar">${renderAvatarSvg('CosmicKoala', 38)}</div>
-                    <div>
-                      <div class="auth-pair-author">CosmicKoala ✦ <span style="color:#a6d8b8;font-size:11px;">✓ Student</span></div>
-                      <div class="auth-pair-time">Tonight 8:00 PM – 10:30 PM</div>
-                    </div>
-                  </div>
-                  <span class="auth-pair-status-badge">Study Partner</span>
-                </div>
-                <p class="auth-pair-text">"Need a study buddy for DSA LeetCode / Algo grind at Library 2F. Coffee & focus mode on!"</p>
-                <div class="auth-pair-footer">
-                  <div class="auth-pair-tags">
-                    <span class="auth-pair-tag">💻 DSA / Tech</span>
-                    <span class="auth-pair-tag">📚 Library Reading Room</span>
-                  </div>
-                  <span class="auth-pair-action-btn">Connect Anonymously →</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Panel 3: Spontaneous Plans -->
-            <div id="auth-panel-plans" class="auth-card-panel">
-              <div class="auth-chat-preview-header">
-                <span class="auth-chat-title" style="color:#93c5fd;">
-                  <span>⚡ Campus Activities Happening Today</span>
-                  <span style="font-size:11px;color:#60a5fa;">● Drop in anytime</span>
-                </span>
-                <span class="auth-chat-badge-safe">🏃 1-Click Join</span>
-              </div>
-
-              <div class="auth-plan-item">
-                <div class="auth-plan-left">
-                  <div class="auth-plan-icon">🏸</div>
-                  <div>
-                    <div class="auth-plan-title">Badminton Doubles (+1 Needed)</div>
-                    <div class="auth-plan-meta">BraveFalcon ✦ · 📍 Sports Complex Arena · Tonight 7:30 PM</div>
-                  </div>
-                </div>
-                <span class="auth-plan-attendees">👥 3 / 4 Joined</span>
-              </div>
-
-              <div class="auth-plan-item">
-                <div class="auth-plan-left">
-                  <div class="auth-plan-icon">🍜</div>
-                  <div>
-                    <div class="auth-plan-title">Late Night Maggi & Chai Study Break</div>
-                    <div class="auth-plan-meta">SunnyFox ✦ · 📍 Neon Food Court · Tonight 11:15 PM</div>
-                  </div>
-                </div>
-                <span class="auth-plan-attendees" style="color:#fcd34d;background:rgba(252,211,77,.12);border-color:rgba(252,211,77,.3);">👥 5 Joined</span>
-              </div>
-
-              <div class="auth-plan-item">
-                <div class="auth-plan-left">
-                  <div class="auth-plan-icon">🎸</div>
-                  <div>
-                    <div class="auth-plan-title">Acoustic Jamming & Chill Vibes</div>
-                    <div class="auth-plan-meta">MysticPanda ✦ · 📍 Campus Amphitheater · Tomorrow 5:00 PM</div>
-                  </div>
-                </div>
-                <span class="auth-plan-attendees" style="color:#f472b6;background:rgba(244,114,182,.12);border-color:rgba(244,114,182,.3);">👥 4 Joined</span>
-              </div>
-            </div>
-          </div>
+          <div class="welcome-values"><span>01 <b>Campus only</b></span><span>02 <b>Alias first</b></span><span>03 <b>Your pace</b></span></div>
         </div>
         ` : ''}
 
@@ -2959,25 +2756,25 @@ function authPage() {
             ${step === 'welcome' ? `
               <span class="auth-form-eyebrow-tag">✦ JOIN AFTERCLASS</span>
               <h2 class="auth-card-title">Where students<br>connect freely.</h2>
-              <p class="auth-card-sub">The private social space for verified college students. Unfiltered campus chat, companion pairing &amp; spontaneous meetups.</p>
+              <p class="auth-card-sub">Your campus, a little closer. Join with your university account and find your kind of company.</p>
 
               <div class="auth-welcome-features">
                 <div class="auth-welcome-feature-item">
                   <span>💬</span>
-                  <div><strong>100% Anonymous Campus Chat</strong> — speak openly with zero gossip or identity leaks.</div>
+                  <div><strong>A little room to be yourself</strong><br>Start a conversation using your campus alias.</div>
                 </div>
                 <div class="auth-welcome-feature-item">
                   <span>👫</span>
-                  <div><strong>Find Companions &amp; Partners</strong> — pair up for coffee, walks, or study sessions when free.</div>
+                  <div><strong>Meet over something simple</strong><br>Coffee, study sessions, walks. Find a shared reason.</div>
                 </div>
                 <div class="auth-welcome-feature-item">
                   <span>⚡</span>
-                  <div><strong>Spontaneous Activities</strong> — drop into badminton, late-night food runs &amp; jam sessions.</div>
+                  <div><strong>Share when you’re ready</strong><br>Reveal your identity only with mutual consent.</div>
                 </div>
               </div>
 
               <button type="button" class="auth-primary-btn" onclick="handleStartForFree()">
-                ⚡ Start for Free →
+                Continue with student email →
               </button>
 
               <div class="auth-divider-or"><span>or faster sign in</span></div>
@@ -2998,9 +2795,9 @@ function authPage() {
               </div>
 
               <div class="auth-trust-strip">
-                <div class="auth-trust-pill"><span>🎭</span> 100% Anonymous</div>
-                <div class="auth-trust-pill"><span>🎓</span> College Students Only</div>
-                <div class="auth-trust-pill"><span>⚡</span> Instant Setup</div>
+                <div class="auth-trust-pill">Alias first</div>
+                <div class="auth-trust-pill">Campus community</div>
+                <div class="auth-trust-pill">Free to join</div>
               </div>
             ` : step === 'form' ? `
               <button type="button" class="auth-back-btn" onclick="handleAuthBack()">
@@ -3029,17 +2826,17 @@ function authPage() {
                       🧑 Non-binary
                     </button>
                     <button type="button" class="auth-gender-btn ${selectedGender === 'prefer_not_to_say' ? 'active' : ''}" onclick="selectAuthGender('prefer_not_to_say')">
-                      🔒 Secret
+                      Prefer not to say
                     </button>
                   </div>
                   <small style="font:11.5px 'DM Sans';color:rgba(255,255,255,.5);display:block;margin-top:-4px;margin-bottom:14px;line-height:1.4;">
-                    Used for matching when you look for companions or partners. You can change this anytime.
+                    Choose the option that feels right for you.
                   </small>
                 </div>
 
                 <div class="auth-security-notice">
                   <span>🔒</span>
-                  <small>Your college email is used <strong>solely to verify student enrollment</strong>. It is cryptographically hashed and never displayed or shared with anyone on campus.</small>
+                  <small>Your university email helps us verify campus access. It isn’t shown on your public student profile.</small>
                 </div>
 
                 <button type="submit" class="auth-primary-btn">
@@ -3072,7 +2869,7 @@ function authPage() {
                   </div>
                 ` : ''}
 
-                <button type="submit" class="auth-primary-btn" style="background:linear-gradient(135deg,#244d42 0%,#183b32 100%);">
+                <button type="submit" class="auth-primary-btn">
                   Enter Afterclass ✦
                 </button>
               </form>
@@ -3087,58 +2884,6 @@ function authPage() {
     </div>
   `;
 }
-
-function initAuthBlobCanvas() {
-  const canvas = document.getElementById('auth-blob-canvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  let W, H, blobs;
-
-  function resize() {
-    W = canvas.width = canvas.offsetWidth;
-    H = canvas.height = canvas.offsetHeight;
-  }
-
-  function makeBlob(x, y, r, color, vx, vy) {
-    return { x, y, r, color, vx, vy };
-  }
-
-  function initBlobs() {
-    blobs = [
-      makeBlob(W * 0.2,  H * 0.2,  W * 0.28, 'rgba(36,77,66,0.55)',   0.18, 0.12),
-      makeBlob(W * 0.75, H * 0.35, W * 0.22, 'rgba(224,92,58,0.2)',   -0.15, 0.18),
-      makeBlob(W * 0.5,  H * 0.75, W * 0.25, 'rgba(55,100,80,0.4)',   0.1, -0.14),
-      makeBlob(W * 0.1,  H * 0.65, W * 0.18, 'rgba(66,133,244,0.12)', 0.2, -0.1),
-      makeBlob(W * 0.85, H * 0.8,  W * 0.2,  'rgba(245,185,50,0.1)',  -0.12, -0.15),
-    ];
-  }
-
-  function draw() {
-    ctx.clearRect(0, 0, W, H);
-    for (const b of blobs) {
-      const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r);
-      g.addColorStop(0, b.color);
-      g.addColorStop(1, 'transparent');
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-      ctx.fillStyle = g;
-      ctx.fill();
-
-      b.x += b.vx;
-      b.y += b.vy;
-      if (b.x - b.r > W || b.x + b.r < 0) b.vx *= -1;
-      if (b.y - b.r > H || b.y + b.r < 0) b.vy *= -1;
-    }
-    requestAnimationFrame(draw);
-  }
-
-  resize();
-  initBlobs();
-  draw();
-  window.addEventListener('resize', () => { resize(); initBlobs(); });
-}
-
-
 
 let currentDraftAvatar = null;
 let activeAvatarStudioTab = 'appearance';
@@ -3379,11 +3124,19 @@ function renderAvatarStudioModal() {
   `));
 }
 
+let dialogReturnFocus = null;
 function modal(content, extraClass = '') {
+  if (!document.querySelector('.modal-backdrop')) dialogReturnFocus = document.activeElement;
+  requestAnimationFrame(() => {
+    const dialog = document.querySelector('.modal[role=dialog]');
+    const heading = dialog?.querySelector('h2');
+    if (heading) { heading.id = 'active-dialog-title'; dialog.setAttribute('aria-labelledby', heading.id); }
+    (dialog?.querySelector('input:not([type=hidden]), textarea, select') || dialog?.querySelector('button'))?.focus();
+  });
   return `
     <div class="modal-backdrop" onclick="closeModal(event)">
-      <div class="modal ${extraClass}" onclick="event.stopPropagation()">
-        <button class="close" onclick="closeModal()">×</button>
+      <div class="modal ${extraClass}" role="dialog" aria-modal="true" aria-label="Afterclass dialog" onclick="event.stopPropagation()">
+        <button class="close" aria-label="Close dialog" onclick="closeModal()">×</button>
         ${content}
       </div>
     </div>
@@ -4463,6 +4216,8 @@ window.closeModal = () => {
     state.locationSharing.polyline = null;
   }
   document.querySelector('.modal-backdrop')?.remove();
+  if (dialogReturnFocus?.isConnected) dialogReturnFocus.focus();
+  dialogReturnFocus = null;
 };
 window.consentLocationSharing = consentLocationSharing;
 window.stopLocationSharing = stopLocationSharing;
@@ -5664,7 +5419,6 @@ function render() {
   }
   const currentView = views[state.view] || home;
   appEl.innerHTML = currentView();
-  if (state.view === 'auth') setTimeout(initAuthBlobCanvas, 0);
 }
 
 // Initial Boot
@@ -5771,3 +5525,16 @@ document.addEventListener('touchend', () => {
   isSwiping = false;
   swipeCurrentDx = 0;
 }, { passive: true });
+
+// Keep keyboard focus inside the active dialog and restore it on dismissal.
+document.addEventListener('keydown', event => {
+  const dialog = document.querySelector('.modal[role=dialog]');
+  if (event.key === 'Escape' && dialog) { event.preventDefault(); window.closeModal(); return; }
+  if (event.key === 'Tab' && dialog) {
+    const controls = [...dialog.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]):not([type=hidden]), textarea:not([disabled]), select:not([disabled]), [tabindex="0"]')].filter(el => el.getClientRects().length);
+    const first = controls[0], last = controls.at(-1);
+    if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) { event.preventDefault(); last?.focus(); }
+    else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) { event.preventDefault(); first?.focus(); }
+  }
+  if (['Enter',' '].includes(event.key) && event.target.matches('.real-switch-casing[role=button]')) { event.preventDefault(); event.target.click(); }
+});
