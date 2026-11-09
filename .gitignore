@@ -9,3 +9,5 @@ server/uploads
 # macOS filesystem metadata
 .DS_Store
 ._*
+
+dist-review/
