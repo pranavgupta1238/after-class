@@ -1,6 +1,6 @@
 # Afterclass Review Centre
 
-The first release gives restricted accounts a private, free way to challenge an account decision. It is a written review service, not a court, public hearing, or automated judgment.
+The Review Centre gives restricted accounts a private, free way to challenge an account decision, with written evidence and an optional scheduled, moderated hearing. This is a platform review, not a legal court or an automated judgment.
 
 ## Student experience
 
@@ -23,7 +23,7 @@ Available responses:
 
 Every response requires an explanation visible to the account holder. The original reports and message snapshots remain staff-only. An older appeal cannot restore access over a newer restriction. A report is evidence for review, not an automatic finding or a vote.
 
-**Staffing:** a campus needs a second, uninvolved moderator to complete an appeal issued by the first. No response deadline or scheduled appointment is promised in this release. Reporter participation is not required, reporter identity is excluded from student API responses, and there is no direct contact between the parties. Staff must also avoid identifying reporters in free-text explanations.
+**Staffing:** a campus needs a second, uninvolved moderator to complete an appeal issued by the first. Only published moderator availability can be booked; the product does not invent appointment slots. Reporter participation is optional. Student responses use role labels rather than reporter names, email addresses, or account IDs. Staff must avoid identifying reporters in free-text explanations.
 
 ## Storage and operational limits
 
@@ -35,7 +35,7 @@ Records are retained until explicitly removed through database administration. B
 
 ## Deployment
 
-The additive migration is `20261109000200_account_review_centre`. It adds decision metadata, account reviews, and timeline entries. New tables enable row-level security and are accessed by the server's existing privileged Prisma connection, never a browser database client.
+The additive migrations are `20261109000200_account_review_centre` and `20261110000100_private_hearings`. They add decision metadata, reviews, timeline entries, appointment slots, hearing participants, and transcripts. New tables enable row-level security and are accessed by the server's existing privileged Prisma connection, never a browser database client.
 
 Run:
 
@@ -58,6 +58,31 @@ RUN_ACCOUNT_REVIEW_TESTS=1 node --test tests/account-review-integration.test.mjs
 
 The integration test creates and removes its own campus and users. It covers restricted access, stale-session revocation, duplicate submissions, cross-account and cross-campus isolation, independent reviewer enforcement, concurrent claims, evidence requests, restoration, one-time reopening, and protection of newer restrictions.
 
-## Later phase
+## Scheduled hearings
 
-Scheduled, optional moderator appointments need actual staffing, private attendance controls, cancellation handling, retention rules, and a safe process for any reporter contribution. Live hearings, calendar slots, calls, and automatic penalties are not part of this release.
+1. An eligible moderator opens **Hearings → Chair availability** and publishes one to eight consecutive 30-minute appointments. Dates are stored in UTC and displayed in each browser's timezone. Unbooked slots can be withdrawn.
+2. The account holder opens their submitted case in the Review Centre and chooses **Schedule / open hearing**. Only slots from an uninvolved moderator on the same campus are shown. If the case already has a reviewer, only that reviewer's slots are eligible. Booking assigns the case to that moderator atomically.
+3. Students associated with the original decision's reports receive a persistent **Hearings** invitation. The toolbar shows a pending-invitation count on sign-in and refreshes once a minute while the app is visible. There are no outgoing emails, SMS, or calendar invitations in this release. Invitees may accept, decline, or provide written evidence privately. They can withdraw from the live session at any time.
+4. Participants open their appointment. The account holder must be present before the moderator starts. The moderator can open the session only during the reserved interval. Its timer ends at the published appointment end, so a late start has less than 30 minutes remaining.
+5. The moderator has the central seat and controls who may speak: account holder, an accepted reporting participant, or moderator only. The moderator may speak throughout. Shared chat updates through authenticated server-sent events, with polling recovery. Participants can submit private statements and supporting images before and during the session.
+6. The server closes submissions at the deadline even if a browser has an inaccurate clock. The moderator can close early. A missed appointment is cancelled without deciding the appeal; before a hearing has started, the account holder can book again. An explicit cancellation releases its slot. Once a hearing starts, that case cannot get a second hearing.
+7. After closing, the moderator selects **Review evidence & decide**. Every decision needs an explanation. Restoration, a reduced suspension (including six months or a year where this shortens the original restriction), and upholding the existing decision use the existing account controls. Newer restrictions cannot be bypassed by an older case. A scheduled or live hearing must be closed or cancelled before a final decision.
+8. Participants see the decision in their hearing room and can download the record visible to their own account. Images can be downloaded individually. Private evidence is never included in another student's transcript.
+
+Reporting students are not required to attend or prove a case in a confrontation. Declining, being absent, or staying silent does not automatically restore or restrict an account. The moderator assesses the evidence and records the reasoning. Role labels reduce disclosure, but participants may infer identity from the underlying incident; invitation copy explains the shared conversation and asks participants not to disclose personal details.
+
+## Hearing access and limits
+
+All hearing routes use current session authentication, including for restricted accounts. Unrelated students, other-campus staff, and the original decision-maker cannot enter. Reviewer eligibility is checked on every request. No browser accesses the database directly. SSE sends invalidation signals only; content is fetched through the same authorization checks. Streams reconnect every two minutes to recheck authentication.
+
+Shared chat does not accept attachments: supporting images are private to their sender and the assigned moderator. Each image submission permits up to three 512 KiB PNG, JPEG, or WebP files. A hearing allows 550 transcript messages; each person can attach images only within their first 12 private submissions. Hearing lists return the latest 100 appointments and availability lists the next 120 slots. These limits protect the existing database quota; monitor usage before increasing them.
+
+The final decision explanation is visible to invited reporters as well as the account holder. Never include confidential evidence, real names, or contact details in that explanation. Original reports and the written appeal timeline are available only to the assigned moderator inside the hearing workspace.
+
+To run hearing integration checks against the isolated local database:
+
+```sh
+RUN_HEARING_TESTS=1 node --test tests/hearings-integration.test.mjs
+```
+
+The test covers slot authorization, overlap, simultaneous booking, reporter invitations, campus and role isolation, optional attendance, private evidence, speaking turns, the server deadline, one hearing per decision, reasoned restriction reduction, cancellation, and rebooking. Test accounts and cases are removed after the run. No production user is banned or restored by these tests.

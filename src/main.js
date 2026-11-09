@@ -1,3 +1,4 @@
+import { installHearings } from './hearings.js';
 import { installReviewCentre } from './review-centre.js';
 import { installConnections } from './connections.js';
 import './style.css';
@@ -254,6 +255,7 @@ function setCachedUser(user) {
 }
 
 function updateMe(user) {
+  if(state.me?.id !== user?.id)window.hearings?.reset();
   if (!user?.isAdmin || state.me?.id !== user.id) {
     window.reviewCentre?.reset();
     adminLoader.reset();
@@ -712,7 +714,7 @@ function layout(content) {
   const username = me?.username || 'Your campus awaits';
   const campusName = me?.university || 'NIIT University';
   const inboxCount = state.pendingApplications.length;
-  const currentLabel = state.view === 'reviews' ? 'Review Centre' : nav.find(([key])=>key===state.view)?.[1] || 'Your campus';
+  const currentLabel = state.view === 'hearings' ? 'Hearings' : state.view === 'reviews' ? 'Review Centre' : nav.find(([key])=>key===state.view)?.[1] || 'Your campus';
   return `
     <div class="shell experience-shell ${state.view === 'chat' ? 'chat-shell' : state.view === 'safety' ? 'safety-shell' : ''}">
       <a class="skip-content" href="#main-content">Skip to content</a>
@@ -724,7 +726,7 @@ function layout(content) {
         <button class="sidebar-bottom" onclick="${me?'openAvatarPreview()':"go('auth')"}" aria-label="${me?'Open your profile':'Join your campus'}">${avatar(me?.avatarConfig||username,false,Boolean(me?.isVerified))}<span class="sidebar-profile-copy"><strong>${escapeHtml(username)}</strong><small>${me?(me.isVerified?'Verified student': 'Student profile'):'Sign in to get started'}</small></span></button>
       </aside>
       <main id="main-content" tabindex="-1" class="${state.view==='chat'?'chat-main':state.view==='safety'?'safety-main':''}">
-        <div class="experience-toolbar"><div class="toolbar-location"><span class="toolbar-symbol" aria-hidden="true">✳</span><span>${currentLabel}</span></div><a class="mobile-wordmark" href="/" onclick="event.preventDefault();go('home')">✦ afterclass<span>.</span></a><div class="toolbar-actions"><button class="toolbar-safety" aria-label="Trust and safety" onclick="go('safety')">${icons.safety}</button><button class="toolbar-create" aria-label="Create a plan" onclick="openComposer()"><span aria-hidden="true">＋</span><span class="toolbar-create-label">New plan</span></button><button class="toolbar-profile" aria-label="Open your profile" onclick="${me?'openAvatarPreview()':"go('auth')"}">${avatar(me?.avatarConfig||username,true,Boolean(me?.isVerified))}</button></div></div>
+        <div class="experience-toolbar"><div class="toolbar-location"><span class="toolbar-symbol" aria-hidden="true">✳</span><span>${currentLabel}</span></div><a class="mobile-wordmark" href="/" onclick="event.preventDefault();go('home')">✦ afterclass<span>.</span></a><div class="toolbar-actions">${window.hearings?.nav()||''}<button class="toolbar-safety" aria-label="Trust and safety" onclick="go('safety')">${icons.safety}</button><button class="toolbar-create" aria-label="Create a plan" onclick="openComposer()"><span aria-hidden="true">＋</span><span class="toolbar-create-label">New plan</span></button><button class="toolbar-profile" aria-label="Open your profile" onclick="${me?'openAvatarPreview()':"go('auth')"}">${avatar(me?.avatarConfig||username,true,Boolean(me?.isVerified))}</button></div></div>
         ${renderWarnedStudentBanner()}${content}
       </main>
     </div><div id="toast" role="status" aria-live="polite" class="toast ${state.toast?'show':''}">${escapeHtml(state.toast)}</div>`;
@@ -3686,10 +3688,11 @@ function renderPrivateModal() {
 // ── Global Window Handlers ───────────────────────────────────────────────────
 
 window.go = (v, replace = false) => {
-  if(state.me?.restricted)v='reviews';
+  if(state.me?.restricted&&!['reviews','hearings'].includes(v))v='reviews';
+  if(v!=='hearings')window.hearings?.leave();
   dismissReactionPicker();
   // If authenticated but unverified non-admin, restrict to verification onboarding
-  if (state.me && !state.me.isVerified && !state.me.isAdmin && !['verification','auth','safety','settings','reviews'].includes(v)) {
+  if (state.me && !state.me.isVerified && !state.me.isAdmin && !['verification','auth','safety','settings','reviews','hearings'].includes(v)) {
     v = 'verification';
   }
   if (state.view === v && !replace) return;
@@ -4290,7 +4293,8 @@ async function loadMe() {
     if (!data.user) throw new Error('Invalid session response');
     updateMe(data.user);
     state.authLoading = false;
-    if(data.user.restricted){state.view='reviews';window.history.replaceState({view:'reviews'},'','/reviews');return;}
+    window.hearings?.checkInvites();
+    if(data.user.restricted){if(state.view!=='hearings')state.view='reviews';window.history.replaceState({view:state.view},'','/'+state.view);return;}
     if (state.view === 'auth') {
       const urlView = getViewFromPath(window.location.pathname) || 'home';
       state.view = urlView;
@@ -4300,7 +4304,7 @@ async function loadMe() {
       }
     }
     if (state.me && !state.me.isVerified && !state.me.isAdmin) {
-      if (!['verification','safety','settings','reviews'].includes(state.view)) {
+      if (!['verification','safety','settings','reviews','hearings'].includes(state.view)) {
         state.view = 'verification';
         try { window.history.replaceState({ view: 'verification' }, '', '/verification'); } catch {}
       }
@@ -4923,7 +4927,8 @@ function verificationPage() {
 
 const cx = installConnections({state,api,modal,closeModal:()=>window.closeModal(),render,toast:t=>window.toast(t),escapeHtml,avatar,loadDiscover,loadInbox,openComposer});
 const reviewCentre = installReviewCentre({state,api,layout,render,escapeHtml,icons,modal,closeModal:()=>window.closeModal(),loadMe});
-const views = { reviews:()=>reviewCentre.page(), home, discover, chat, inbox, safety, settings, auth: authPage, admin: adminPortal, verification: verificationPage };
+const hearings = installHearings({state,api,layout,render,escapeHtml,loadMe});
+const views = { hearings:()=>hearings.page(), reviews:()=>reviewCentre.page(), home, discover, chat, inbox, safety, settings, auth: authPage, admin: adminPortal, verification: verificationPage };
 
 function getViewFromPath(pathname) {
   const clean = String(pathname || '').replace(/^\/+|\/+$/g, '').toLowerCase();
@@ -4949,7 +4954,7 @@ function render() {
     document.querySelector('#retry-startup').addEventListener('click', loadMe);
     return;
   }
-  if(state.me?.restricted)state.view='reviews';
+  if(state.me?.restricted&&!['reviews','hearings'].includes(state.view))state.view='reviews';
   const currentView = views[state.view] || home;
   const draft = captureComposer(appEl.querySelector('#message'));
   appEl.innerHTML = currentView();
