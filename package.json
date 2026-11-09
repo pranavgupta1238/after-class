@@ -11,7 +11,8 @@
     "db:generate": "prisma generate --schema server/prisma/schema.prisma",
     "db:migrate": "prisma migrate deploy --schema server/prisma/schema.prisma",
     "db:validate": "prisma validate --schema server/prisma/schema.prisma",
-    "db:seed": "node server/prisma/seed.js"
+    "db:seed": "node server/prisma/seed.js",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
