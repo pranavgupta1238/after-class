@@ -5,3 +5,7 @@ server/data.json
 .git-local
 .keys
 server/uploads
+
+# macOS filesystem metadata
+.DS_Store
+._*
