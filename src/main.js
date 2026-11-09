@@ -781,21 +781,24 @@ function planLoadState() {
   return '';
 }
 
+let homeWhen = 'today';
+window.setHomeWhen = value => { if (['today','tomorrow','week'].includes(value)) homeWhen=value; render(); };
+window.exploreHomePlans = () => { discovery.when=homeWhen; discovery.category='all'; discovery.query='';state.discoverFilter='all';go('discover'); };
+window.startHomePlan = category => { window.startPlanIdea(category); if(homeWhen==='tomorrow') window.selectQuickTime('tomorrow'); };
 function home() {
-  const plans = selectPlans(state.requests);
-  return layout(`
-    <section class="home-feature">
-      <div class="home-feature-copy"><h1>Good company.<br><em>After class.</em></h1><p>Meet someone over a plan you’d make anyway.</p><button class="primary" onclick="go('discover')">Explore plans</button></div>
-      <div class="home-feature-art" aria-hidden="true">
-        <div class="art-orbit"></div><div class="art-postcard"><span>THE USUAL SPOT</span><svg viewBox="0 0 300 220" fill="none"><ellipse cx="150" cy="178" rx="118" ry="24" fill="#b46d4620"/><path d="m56 144 89-41 103 49-91 44Z" fill="#ede1c7"/><path d="m65 143 81-35 93 43-83 38Z" stroke="#b49b79"/><ellipse cx="116" cy="127" rx="47" ry="20" fill="#fcf6e7"/><path d="M83 85h65v37c0 31-65 31-65 0Z" fill="#fcf6e7" stroke="#cbab88" stroke-width="2"/><path d="M148 93c37-8 35 37 0 30" stroke="#fcf6e7" stroke-width="11"/><ellipse cx="115" cy="86" rx="32" ry="13" fill="#dfc29e"/><ellipse cx="115" cy="88" rx="26" ry="9" fill="#704531"/><path d="M105 63c-15-15 12-19 0-33M121 65c-13-16 14-20 2-34" stroke="#fff7e5" stroke-width="3" stroke-linecap="round"/><ellipse cx="203" cy="162" rx="41" ry="17" fill="#527569"/><path d="M175 127h54v30c0 25-54 25-54 0Z" fill="#234b3e"/><path d="M229 133c28-5 29 28 0 24" stroke="#234b3e" stroke-width="9"/><ellipse cx="202" cy="127" rx="27" ry="11" fill="#86a08b"/><ellipse cx="202" cy="129" rx="22" ry="7" fill="#523c2c"/><path d="M199 106c-11-12 10-17 0-29" stroke="#fff7e5" stroke-width="3" stroke-linecap="round"/></svg><strong>Room for one more.</strong></div>
-        <div class="art-ticket"><span>AFTERCLASS</span><strong>Make it a<br>good afternoon.</strong><i>✦</i></div>
-      </div>
-    </section>
-    <section class="quick-plans home-activities" aria-label="Start a plan"><div class="quick-plan-options">${ACTIVITIES.slice(1).map(a=>`<button class="activity-tile activity-tile-${a.id}" onclick="startPlanIdea('${a.id}')"><span aria-hidden="true">${uiIcon(a.id)}</span>${a.label}</button>`).join('')}</div></section>
-    <section class="portal-section-head"><h2>Upcoming plans</h2><button class="link" onclick="go('discover')">View all</button></section>
-    <div class="request-grid campus-plan-grid">${planLoadState() || (plans.length ? plans.slice(0,3).map(card).join('') : `<div class="home-empty"><div><h3>The afternoon is open.</h3><p>No upcoming plans yet. Start with yours.</p></div><button class="primary" onclick="openComposer()">Create a plan</button></div>`)}</div>
-    <button class="room-shortcut" onclick="go('chat')"><span class="room-shortcut-icon">${icons.chat}</span><span><strong>Campus chat</strong><small>Join the conversation</small></span></button>
-  `);
+  const plans = selectPlans(state.requests,{when:homeWhen});
+  const ideas = [
+    {id:'coffee',title:'Coffee, anyone?',detail:'A table for two.',duration:'Coffee & food'},
+    {id:'move',title:'Step outside.',detail:'A walk. A game. A change of scene.',duration:'Get moving'},
+    {id:'play',title:'One more round.',detail:'Bring a game. Meet your opponent.',duration:'Play & unwind'}
+  ];
+  return layout(`<div class="social-home">
+    <section class="social-heading"><div><span class="social-dateline">${new Date().toLocaleDateString([], {weekday:'long',day:'numeric',month:'long'})}</span><h1>Make time<br>for <em>someone.</em></h1></div><div class="social-intro"><p>A free hour is a good place to start.</p><button class="primary" onclick="openComposer()">Create a plan</button></div></section>
+    <section class="social-intentions" aria-label="Plan ideas">${ideas.map((idea,i)=>`<button class="social-idea social-idea-${idea.id}" onclick="startHomePlan('${idea.id}')"><div class="social-idea-top"><span>${idea.duration}</span><span class="idea-number">0${i+1}</span></div><div class="social-idea-art" aria-hidden="true">${uiIcon(idea.id)}</div><h2>${idea.title}</h2><p>${idea.detail}</p><span class="idea-action">Make this plan</span></button>`).join('')}</section>
+    <div class="social-bottom"><section class="social-feed"><div class="social-feed-heading"><h2>Find your company</h2><div class="availability-tabs" role="group" aria-label="When are you free">${[['today','Today'],['tomorrow','Tomorrow'],['week','This week']].map(([v,l])=>`<button aria-pressed="${homeWhen===v}" onclick="setHomeWhen('${v}')">${l}</button>`).join('')}</div></div>
+    <div class="request-grid campus-plan-grid">${planLoadState() || (plans.length?plans.slice(0,2).map(card).join(''):`<div class="social-empty"><span aria-hidden="true">${uiIcon('calendar')}</span><div><h3>No plans ${homeWhen==='week'?'this week':homeWhen}</h3><p>Be the first to put something on the calendar.</p></div><button class="link" onclick="openComposer()">Add yours</button></div>`)}</div>${plans.length?'<button class="social-view-all" onclick="exploreHomePlans()">View matching plans</button>':''}</section>
+    <div class="social-sidecard"><div class="social-side-icon">${icons.chat}</div><h2>Before the<br>first hello.</h2><p>See what your campus is talking about.</p><button onclick="go('chat')">Open campus chat</button><div class="social-side-rule"></div><button class="social-study-link" onclick="startHomePlan('study')">${uiIcon('study')} Find a study partner</button></div></div>
+  </div>`);
 }
 
 function card(r) {
@@ -920,7 +923,12 @@ function chat() {
 
 function inbox() {
   const activeTab = state.inboxTab || 'matches';
-  const myPlansCount = state.myPlans?.length || 0;
+  const allPlans = state.myPlans || [];
+  const currentPlans = allPlans.filter(p => p.status === 'open' && new Date(p.scheduledAt) > new Date() && (!p.expiresAt || new Date(p.expiresAt) > new Date()));
+  const pastPlans = allPlans.filter(p => !currentPlans.includes(p));
+  const showPast = state.inboxPlanFilter === 'past';
+  const visiblePlans = showPast ? pastPlans : currentPlans;
+  const myPlansCount = currentPlans.length;
   return layout(`
     <section class="page-title compact">
 
@@ -973,18 +981,14 @@ function inbox() {
       ` : ''}
 
       ${state.matches.length === 0 && state.pendingApplications.length === 0 ? `
-        <div class="empty-inbox">
-          <span>✦</span>
-          <h2>No conversations yet</h2>
-          <p>When someone accepts your interest or you accept theirs, your private chat will appear here.</p>
-          <button class="primary" onclick="go('discover')">Explore plans</button>
-        </div>
+        <div class="inbox-welcome"><div class="inbox-welcome-art" aria-hidden="true"><span>${icons.inbox}</span><span>${icons.chat}</span></div><div><h2>Your next conversation<br>starts with a plan.</h2><p>When an invitation is accepted, you’ll find your private chat here.</p><button class="primary" onclick="go('discover')">Find a plan</button></div></div>
       ` : ''}
     ` : `
       <section style="margin-top:20px;">
-        ${state.myPlans && state.myPlans.length > 0 ? `
+        <div class="plan-history-tabs" role="group" aria-label="Your plan status"><button aria-pressed="${!showPast}" onclick="setInboxPlanFilter('current')">Upcoming <span>${currentPlans.length}</span></button><button aria-pressed="${showPast}" onclick="setInboxPlanFilter('past')">Past plans <span>${pastPlans.length}</span></button></div>
+        ${visiblePlans.length > 0 ? `
           <div class="my-plans-grid">
-            ${state.myPlans.map(p => {
+            ${visiblePlans.map(p => {
               const isPast = p.scheduledAt && new Date(p.scheduledAt).getTime() < Date.now();
               const isExpired = isPast || (p.expiresAt && new Date(p.expiresAt).getTime() < Date.now());
               const isActive = p.status === 'open' && !isExpired;
@@ -1007,11 +1011,11 @@ function inbox() {
                     <span class="status-badge ${statusClass}">${statusLabel}</span>
                     <small>${dateStr}</small>
                   </div>
-                  <h3>${p.activity}</h3>
-                  <p class="muted">📍 ${p.location}</p>
+                  <h3>${escapeHtml(p.activity)}</h3>
+                  <p class="muted">${escapeHtml(p.location)}</p>
                   <div class="my-plan-footer">
-                    <span>👥 ${p.pendingApplicantsCount} applicant${p.pendingApplicantsCount === 1 ? '' : 's'}</span>
-                    ${isActive ? `<button class="close-plan-btn" onclick="closeMyPlan('${p.id}')">Close plan</button>` : ''}
+                    <span>${p.pendingApplicantsCount} applicant${p.pendingApplicantsCount === 1 ? '' : 's'}</span>
+                    ${isActive ? `<button class="close-plan-btn" onclick="closeMyPlan('${p.id}')">Close plan</button>` : `<button class="close-plan-btn" onclick="repeatMyPlan('${p.id}')">Plan again</button>`}
                   </div>
                 </div>
               `;
@@ -1020,8 +1024,8 @@ function inbox() {
         ` : `
           <div class="empty-inbox">
             <span>${uiIcon('coffee')}</span>
-            <h2>No posted plans yet.</h2>
-            <p>Have an idea for a study session, coffee meetup, or gym workout?</p>
+            <h2>${showPast ? 'No past plans' : 'Your calendar is open'}</h2>
+            <p>${showPast ? 'Completed and closed plans will appear here.' : 'Post an invitation for your next free hour.'}</p>
             <button class="primary" onclick="openComposer()">＋ Create a plan</button>
           </div>
         `}
@@ -2835,7 +2839,7 @@ function openComposer() {
     <div class="composer-modal-content">
 
       <h2>Create a plan</h2>
-      <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">Choose an activity, a public spot, and a time.</p>
+      <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">One-to-one plans pair a verified man with a verified woman.</p>
 
       <form onsubmit="createPlan(event)">
         <div class="composer-field-group">
@@ -4551,6 +4555,9 @@ window.applyToRequest = async (requestId, e) => {
     toast(err.message);
   }
 };
+
+window.setInboxPlanFilter = filter => { state.inboxPlanFilter = filter === 'past' ? 'past' : 'current'; render(); };
+window.repeatMyPlan = id => { const plan=state.myPlans.find(p=>p.id===id); if(!plan)return; openComposer(); window.selectQuickActivity(plan.activity); window.selectQuickLocation(plan.location); };
 
 window.setInboxTab = tab => {
   if (state.inboxTab === tab) return;
