@@ -10,6 +10,8 @@ import './messaging.css';
 import './forms.css';
 import './emoji-moments.css';
 import './emoji-picker.css';
+import './emoji-composer.css';
+import { mountEmojiComposers, insertComposerText, focusComposer, clearComposer, setComposerPlaceholder, captureComposer, restoreComposer } from './emoji-composer.mjs';
 import { EMOJI_CATEGORIES, selectEmojis } from './emoji-catalog.mjs';
 import { emojiCount, playEmojiMoment } from './emoji-moments.mjs';
 import { createAdminLoader } from './admin-loader.mjs';
@@ -634,16 +636,7 @@ window.insertSticker = (text, e) => {
   try { localStorage.setItem('afterclass_recent_emojis',JSON.stringify(recentEmojis)); } catch {}
   const inputId = mediaTrayTarget === 'campus' ? '#message' : '#private-msg-input';
   const input = document.querySelector(inputId);
-  if (input) {
-    const start = input.selectionStart ?? input.value.length;
-    const end = input.selectionEnd ?? input.value.length;
-    const val = input.value;
-    input.value = val.substring(0, start) + text + val.substring(end);
-    const newPos = start + text.length;
-    input.selectionStart = newPos;
-    input.selectionEnd = newPos;
-    input.focus();
-  }
+  if (input) insertComposerText(input, text);
 };
 
 document.addEventListener('click', e => {
@@ -3674,6 +3667,8 @@ function renderPrivateModal() {
     </form>
   `));
 
+  mountEmojiComposers(document.body);
+
   if (state.locationSharing?.active) {
     setTimeout(() => {
       initCampusMap(match);
@@ -4097,8 +4092,8 @@ window.setReplyTo = msg => {
   renderReplyBar();
   const input = document.querySelector('#message');
   if (input) {
-    input.focus();
-    input.placeholder = `Reply to ${msg.sender}…`;
+    focusComposer(input);
+    setComposerPlaceholder(input, `Reply to ${msg.sender}…`);
   }
 };
 
@@ -4107,7 +4102,7 @@ window.cancelReply = () => {
   renderReplyBar();
   const input = document.querySelector('#message');
   if (input) {
-    input.placeholder = 'Say something to campus…';
+    setComposerPlaceholder(input, 'Say something to campus…');
   }
 };
 
@@ -4157,9 +4152,9 @@ window.sendMessage = e => {
   const replyTo = state.replyingTo ? { ...state.replyingTo } : null;
   state.replyingTo = null;
   renderReplyBar();
-  el.value = '';
-  el.placeholder = 'Say something to campus…';
-  el.focus();
+  clearComposer(el);
+  setComposerPlaceholder(el, 'Say something to campus…');
+  focusComposer(el);
   stopTypingNow();
   playSendSound();
   socket.emit('campus:message', { content: val, replyTo }, r => {
@@ -4174,8 +4169,8 @@ window.sendPrivateMessage = (e, roomId) => {
   if (!el || !el.value.trim()) return;
   if (!socket?.connected) return toast('Chat disconnected.');
   const val = el.value;
-  el.value = '';
-  el.focus();
+  clearComposer(el);
+  focusComposer(el);
   stopTypingNow(roomId);
   playSendSound();
   socket.emit('message:send', { roomId, content: val }, r => {
@@ -4944,7 +4939,10 @@ function render() {
     return;
   }
   const currentView = views[state.view] || home;
+  const draft = captureComposer(appEl.querySelector('#message'));
   appEl.innerHTML = currentView();
+  mountEmojiComposers(appEl);
+  restoreComposer(appEl.querySelector('#message'), draft);
 }
 
 // Initial Boot

@@ -1,0 +1,10 @@
+.chat-input-pill input[type="hidden"] { display:none!important; }
+.chat-input-pill .emoji-composer {
+  flex:1;min-width:0;min-height:42px;max-height:96px;overflow:auto;
+  padding:8px 6px;box-sizing:border-box;border:0;outline:0;background:transparent;
+  color:var(--ink);font:400 14.5px/26px 'DM Sans',sans-serif;
+  white-space:pre-wrap;overflow-wrap:anywhere;cursor:text;caret-color:var(--forest);
+  scrollbar-width:thin;
+}
+.emoji-composer[data-empty="true"]::before { content:attr(data-placeholder);color:#8a9189;pointer-events:none; }
+.chat-input-pill .emoji-composer img.ac-emoji { width:26px;height:26px;display:inline-block;vertical-align:middle;margin:0 1px;user-select:all; }
