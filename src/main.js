@@ -759,7 +759,7 @@ function layout(content) {
   const inboxCount = state.pendingApplications.length;
   const currentLabel = nav.find(([key])=>key===state.view)?.[1] || 'Your campus';
   return `
-    <div class="shell experience-shell ${state.view === 'chat' ? 'chat-shell' : ''}">
+    <div class="shell experience-shell ${state.view === 'chat' ? 'chat-shell' : state.view === 'safety' ? 'safety-shell' : ''}">
       <a class="skip-content" href="#main-content">Skip to content</a>
       <aside class="experience-sidebar">
         <a class="brand" href="/" onclick="event.preventDefault();go('home')"><i>✦</i> afterclass<span class="brand-period">.</span></a>
@@ -768,7 +768,7 @@ function layout(content) {
 
         <button class="sidebar-bottom" onclick="${me?'openAvatarPreview()':"go('auth')"}" aria-label="${me?'Open your profile':'Join your campus'}">${avatar(me?.avatarConfig||username,false,Boolean(me?.isVerified))}<span class="sidebar-profile-copy"><strong>${escapeHtml(username)}</strong><small>${me?(me.isVerified?'Verified student': 'Student profile'):'Sign in to get started'}</small></span></button>
       </aside>
-      <main id="main-content" tabindex="-1" class="${state.view==='chat'?'chat-main':''}">
+      <main id="main-content" tabindex="-1" class="${state.view==='chat'?'chat-main':state.view==='safety'?'safety-main':''}">
         <div class="experience-toolbar"><div class="toolbar-location"><span class="toolbar-symbol" aria-hidden="true">✳</span><span>${currentLabel}</span></div><a class="mobile-wordmark" href="/" onclick="event.preventDefault();go('home')">✦ afterclass<span>.</span></a><div class="toolbar-actions"><button class="toolbar-safety" aria-label="Trust and safety" onclick="go('safety')">${icons.safety}</button><button class="toolbar-create" aria-label="Create a plan" onclick="openComposer()"><span aria-hidden="true">＋</span><span class="toolbar-create-label">New plan</span></button><button class="toolbar-profile" aria-label="Open your profile" onclick="${me?'openAvatarPreview()':"go('auth')"}">${avatar(me?.avatarConfig||username,true,Boolean(me?.isVerified))}</button></div></div>
         ${renderWarnedStudentBanner()}${content}
       </main>
@@ -973,11 +973,11 @@ function safety() {
     <div class="safety-center-heading"><h1>Trust & safety</h1><button class="secondary" onclick="openGuidelines()">Community guidelines</button></div>
     <div class="safety-center-grid"><section class="safety-feature"><div class="safety-seal" aria-hidden="true">${icons.safety}<span></span></div><h2>Your space.<br><em>Your say.</em></h2><p>You choose what to share and when to meet.</p><button onclick="go('settings')">Manage your privacy</button></section>
     <section class="safety-controls" aria-label="Privacy and reporting">
-      <details open><summary><span class="safety-control-icon">${icons.settings}</span><span>Your identity<span class="safety-summary-detail">An alias in public. Your choice in private.</span></span><i aria-hidden="true">＋</i></summary><div class="safety-answer"><p>Your university email stays off your public profile. Sharing your identity in a private chat requires agreement from both people.</p><button class="link" onclick="go('settings')">View your profile settings</button></div></details>
-      <details><summary><span class="safety-control-icon">${icons.chat}</span><span>Something felt wrong?<span class="safety-summary-detail">Report a message for review.</span></span><i aria-hidden="true">＋</i></summary><div class="safety-answer"><p>Open the message’s actions, choose Report, and select a reason. A moderator can review the surrounding conversation and take action.</p><button class="link" onclick="go('chat')">Open campus chat</button></div></details>
-      <details><summary><span class="safety-control-icon">${icons.safety}</span><span>What verification means<span class="safety-summary-detail">A reviewed account. Not a safety guarantee.</span></span><i aria-hidden="true">＋</i></summary><div class="safety-answer"><p>Verification records that an account has passed the current review process. It does not guarantee someone’s intentions or behaviour. Keep personal details private until you feel comfortable.</p></div></details>
+      <details name="safety-topics" open><summary><span class="safety-control-icon">${icons.settings}</span><span>Your identity<span class="safety-summary-detail">An alias in public. Your choice in private.</span></span><i aria-hidden="true">＋</i></summary><div class="safety-answer"><p>Your university email stays off your public profile. Sharing your identity in a private chat requires agreement from both people.</p><button class="link" onclick="go('settings')">View your profile settings</button></div></details>
+      <details name="safety-topics"><summary><span class="safety-control-icon">${icons.chat}</span><span>Something felt wrong?<span class="safety-summary-detail">Report a message for review.</span></span><i aria-hidden="true">＋</i></summary><div class="safety-answer"><p>Open the message’s actions, choose Report, and select a reason. A moderator can review the surrounding conversation and take action.</p><button class="link" onclick="go('chat')">Open campus chat</button></div></details>
+      <details name="safety-topics"><summary><span class="safety-control-icon">${icons.safety}</span><span>What verification means<span class="safety-summary-detail">A reviewed account. Not a safety guarantee.</span></span><i aria-hidden="true">＋</i></summary><div class="safety-answer"><p>Verification records that an account has passed the current review process. It does not guarantee someone’s intentions or behaviour. Keep personal details private until you feel comfortable.</p></div></details>
     </section></div>
-    <section class="meeting-guide"><div><h2>Before you meet</h2><p>Keep the first plan simple.</p></div><ol><li><span>01</span><strong>Choose a public spot</strong><p>A café, library, or busy campus space.</p></li><li><span>02</span><strong>Let a friend know</strong><p>Share the place and time with someone you trust.</p></li><li><span>03</span><strong>Keep your options open</strong><p>You can change your mind or leave at any time.</p></li></ol></section>
+    <footer class="meeting-guide" aria-labelledby="meeting-guide-title"><div><h2 id="meeting-guide-title">Before you meet</h2><p>Keep the first plan simple.</p></div><ol><li><span>01</span><strong>Choose a public spot</strong><p>A café, library, or busy campus space.</p></li><li><span>02</span><strong>Let a friend know</strong><p>Share the place and time with someone you trust.</p></li><li><span>03</span><strong>Keep your options open</strong><p>You can change your mind or leave at any time.</p></li></ol></footer>
   </section>`);
 }
 
