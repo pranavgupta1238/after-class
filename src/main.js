@@ -1,6 +1,7 @@
 import './style.css';
 import './campus.css';
 import './experience.css';
+import './portal.css';
 import { ACTIVITIES, activityFor, selectPlans, planTime } from './discovery.mjs';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -743,7 +744,7 @@ window.dismissWarningNotice = () => {
 
 function layout(content) {
   const me = state.me;
-  const nav = [['home','Home','Home'],['discover','Discover','Explore'],['chat','Campus chat','Chat'],['inbox','Inbox','Inbox'],['safety','Trust & safety','Safety'],['settings','Your space','You']];
+  const nav = [['home','Home','Home'],['discover','Discover','Explore'],['chat','Campus chat','Chat'],['inbox','Inbox','Inbox'],['safety','Trust & safety','Safety'],['settings','Settings','You']];
   if (me?.isAdmin) nav.push(['admin','Moderation','Admin']);
   const username = me?.username || 'Your campus awaits';
   const campusName = me?.university || 'NIIT University';
@@ -754,9 +755,9 @@ function layout(content) {
       <a class="skip-content" href="#main-content">Skip to content</a>
       <aside class="experience-sidebar">
         <a class="brand" href="/" onclick="event.preventDefault();go('home')"><i>✦</i> afterclass<span class="brand-period">.</span></a>
-        <div class="campus"><span>YOUR LITTLE CORNER</span><b>${escapeHtml(campusName)}</b><small>Campus community</small></div>
+        <div class="campus"><span>CAMPUS</span><b>${escapeHtml(campusName)}</b></div>
         <nav aria-label="Main navigation">${nav.map(([key,label,mobile])=>`<button type="button" data-nav="${key}" class="${state.view===key?'active':''}" ${state.view===key?'aria-current="page"':''} aria-label="${label}" onclick="go('${key}')"><span class="nav-icon" aria-hidden="true">${icons[key]||'◈'}</span><span class="nav-label">${label}</span><span class="nav-mobile-label">${mobile}</span>${key==='inbox'&&inboxCount?`<em aria-label="${inboxCount} incoming interests">${inboxCount}</em>`:''}</button>`).join('')}</nav>
-        <div class="sidebar-invitation"><span aria-hidden="true">✳</span><p>A small plan.<br>A new possibility.</p><button onclick="openComposer()">Make the first move <b>↗</b></button></div>
+
         <button class="sidebar-bottom" onclick="${me?'openAvatarPreview()':"go('auth')"}" aria-label="${me?'Open your profile':'Join your campus'}">${avatar(me?.avatarConfig||username,false,Boolean(me?.isVerified))}<span class="sidebar-profile-copy"><strong>${escapeHtml(username)}</strong><small>${me?(me.isVerified?'Verified student': 'Student profile'):'Sign in to get started'}</small></span><span class="profile-chevron" aria-hidden="true">↗</span></button>
       </aside>
       <main id="main-content" tabindex="-1" class="${state.view==='chat'?'chat-main':''}">
@@ -770,40 +771,20 @@ const discovery = { query: '', category: 'all', when: 'any', sort: 'soonest' };
 let discoverStatus = 'idle';
 
 function planLoadState() {
-  if (!state.me) return `<div class="campus-empty"><span class="campus-empty-icon">↗</span><h3>Your campus is on the other side.</h3><p>Sign in with your university email to see student plans.</p><button class="primary" onclick="go('auth')">Join your campus →</button></div>`;
+  if (!state.me) return `<div class="campus-empty"><span class="campus-empty-icon">↗</span><h3>Sign in to see plans</h3><p>Sign in with your university email to see student plans.</p><button class="primary" onclick="go('auth')">Join your campus →</button></div>`;
   if (discoverStatus === 'error') return `<div class="campus-empty" role="status"><span class="campus-empty-icon">↻</span><h3>We couldn’t load campus plans.</h3><p>Your connection may need a moment. Give it another try.</p><button class="primary" onclick="retryDiscover()">Try again</button></div>`;
-  if (discoverStatus === 'loading' || discoverStatus === 'idle') return `<div class="campus-empty" role="status"><span class="campus-empty-icon">✦</span><h3>Finding your next small adventure…</h3><p>Loading plans from your campus.</p></div>`;
+  if (discoverStatus === 'loading' || discoverStatus === 'idle') return `<div class="campus-empty" role="status"><span class="campus-empty-icon">✦</span><h3>Loading plans…</h3><p>Loading plans from your campus.</p></div>`;
   return '';
 }
 
 function home() {
   const plans = selectPlans(state.requests);
-  const today = selectPlans(state.requests, { when: 'today' });
-  const date = new Date().toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
   return layout(`
-    <div class="campus-topline"><span>${escapeHtml(state.me?.university || 'NIIT University')} <span class="campus-divider">/</span> THE COMMON ROOM</span><time>${date}</time></div>
-    <section class="campus-hero">
-      <div class="campus-hero-copy"><span class="eyebrow">LESS SCROLLING. MORE SHOWING UP.</span>
-        <h1>Good company.<br>Small plans.<br><em>Your kind of campus.</em></h1>
-        <p>A chai break. A study buddy. One more person for a walk.<br class="desktop-break"> Make room for the people you haven’t met yet.</p>
-        <div class="campus-actions"><button class="primary" onclick="go('discover')">Find your next plan <span>↗</span></button><button class="campus-text-action" onclick="openComposer()">Or start one yourself →</button></div>
-        <div class="campus-promise"><span>◈</span> An alias first. Your identity, when you choose.</div>
-      </div>
-      <div class="campus-board" aria-label="A few ideas for your next campus plan">
-        <span class="board-caption">THE BEST PLANS START SMALL</span>
-        <div class="board-orbit" aria-hidden="true"></div>
-        <button class="idea-note note-coffee" onclick="startPlanIdea('coffee')"><span>01 / TAKE A BREAK</span><strong>Chai?<br>Chai.</strong><small>Good conversation, no agenda. ↗</small><i aria-hidden="true">☕</i></button>
-        <button class="idea-note note-study" onclick="startPlanIdea('study')"><span>02 / FIND YOUR FOCUS</span><strong>Same deadline.<br>Better company.</strong><small>Find a study buddy ↗</small></button>
-        <button class="idea-note note-walk" onclick="startPlanIdea('move')"><span>03 / STEP OUTSIDE</span><strong>A walk.<br>A fresh perspective.</strong><small>Start something simple ↗</small><i aria-hidden="true">↝</i></button>
-        <div class="board-stamp" aria-hidden="true">made for<br><b>real life.</b><span>✳</span></div>
-      </div>
-    </section>
-    <section class="campus-intents" aria-label="Plan ideas">${ACTIVITIES.slice(1).map(a=>`<button onclick="browseActivity('${a.id}')"><span class="intent-icon intent-${a.id}">${a.icon}</span><span>${a.label}<small>Find your kind of company</small></span><b>↗</b></button>`).join('')}</section>
-    <section class="section-head campus-section-heading"><div><span class="eyebrow">A LITTLE LESS “MAYBE SOMEDAY”</span><h2>Make today a little different.</h2><p>${discoverStatus === 'ready' && state.me ? `${today.length} ${today.length === 1 ? 'plan' : 'plans'} today · ${plans.length} upcoming on your campus` : 'Small invitations. A good place to start.'}</p></div><button class="link" onclick="go('discover')">Explore all plans ↗</button></section>
-    <div class="request-grid campus-plan-grid">${planLoadState() || (plans.length ? plans.slice(0,3).map(card).join('') + (plans.length < 3 ? `<button class="campus-start-card ${plans.length===1?'wide':''}" onclick="openComposer()"><span class="eyebrow">THERE’S ROOM FOR YOUR IDEA</span><strong>Someone’s kind of plan<br>could be yours.</strong><span class="start-card-cta">Put out a little invitation <b>↗</b></span><i aria-hidden="true">✳</i></button>` : '') : `<div class="campus-empty"><span class="campus-empty-icon">✳</span><h3>Someone has to make the first move.</h3><p>A quiet campus feed is a blank page. Invite someone to your next coffee break.</p><button class="primary" onclick="startPlanIdea('coffee')">Start a small plan →</button></div>`)}</div>
-    <section class="campus-chat-invite"><div class="chat-invite-icon" aria-hidden="true">“</div><div><span class="eyebrow">NOT READY TO MAKE A PLAN?</span><h2>Start with a hello.</h2><p>Drop into campus chat. Ask a question, share a thought, find a familiar voice.</p></div><button class="primary" onclick="go('chat')">Open campus chat ↗</button></section>
-    <section class="campus-how"><div><span class="eyebrow">YOUR PACE. YOUR PEOPLE.</span><h2>Meeting someone<br>should feel this easy.</h2><button class="link" onclick="go('safety')">Read our safety guide ↗</button></div><ol><li><span>01</span><div><h3>Show up as yourself. Keep your name.</h3><p>Your public alias is how other students meet you.</p></div></li><li><span>02</span><div><h3>Find a shared little thing.</h3><p>Express interest in a plan. When the host accepts, you get a private conversation.</p></div></li><li><span>03</span><div><h3>Take it offline, on your terms.</h3><p>Choose a public campus spot. Sharing your identity takes mutual consent.</p></div></li></ol></section>
-    <footer class="campus-footer"><span>✦ afterclass</span><span>For the life between lectures.</span></footer>
+    <section class="portal-heading"><div><span class="eyebrow">${escapeHtml(state.me?.university || 'NIIT University')}</span><h1>After hours.</h1><p>See what’s happening on campus.</p></div><button class="primary" onclick="openComposer()">＋ New plan</button></section>
+    <section class="quick-plans" aria-label="Start a plan"><div><h2>What are you up for?</h2><p>Start with something you enjoy.</p></div><div class="quick-plan-options">${ACTIVITIES.slice(1).map(a=>`<button onclick="startPlanIdea('${a.id}')"><span aria-hidden="true">${a.icon}</span>${a.label}<b aria-hidden="true">↗</b></button>`).join('')}</div></section>
+    <section class="portal-section-head"><h2>Upcoming plans</h2><button class="link" onclick="go('discover')">View all ↗</button></section>
+    <div class="request-grid campus-plan-grid">${planLoadState() || (plans.length ? plans.slice(0,3).map(card).join('') : `<div class="campus-empty"><span class="campus-empty-icon" aria-hidden="true">＋</span><h3>No plans yet</h3><p>Invite someone to join yours.</p><button class="primary" onclick="openComposer()">Create a plan</button></div>`)}</div>
+    <button class="room-shortcut" onclick="go('chat')"><span class="room-shortcut-icon">${icons.chat}</span><span><strong>Campus chat</strong><small>Join the conversation</small></span><b aria-hidden="true">↗</b></button>
   `);
 }
 
@@ -826,25 +807,24 @@ function discoveryResults() {
   const status = planLoadState();
   if (status) return status;
   const displayed = selectPlans(state.requests, { ...discovery, savedOnly: state.discoverFilter === 'saved', savedIds: state.savedPlanIds });
-  if (!displayed.length) return `<div class="campus-empty"><span class="campus-empty-icon">✳</span><h3>${state.discoverFilter === 'saved' ? 'Keep a little possibility for later.' : 'Your next plan could start with you.'}</h3><p>${state.discoverFilter === 'saved' ? 'Bookmark a plan to find it here. Only upcoming plans appear.' : 'No upcoming plans match these filters. Try a broader search or put out an invitation.'}</p><div class="campus-actions"><button class="primary" onclick="openComposer()">Create a plan</button><button class="campus-text-action" onclick="resetDiscovery()">Reset filters</button></div></div>`;
+  if (!displayed.length) return `<div class="campus-empty"><span class="campus-empty-icon">✳</span><h3>${state.discoverFilter === 'saved' ? 'Nothing saved yet' : 'No plans found'}</h3><p>${state.discoverFilter === 'saved' ? 'Save upcoming plans to find them here.' : 'Try another filter or create a plan.'}</p><div class="campus-actions"><button class="primary" onclick="openComposer()">Create a plan</button><button class="campus-text-action" onclick="resetDiscovery()">Reset filters</button></div></div>`;
   return displayed.map(card).join('');
 }
 
 function discoveryCount() {
   if (discoverStatus !== 'ready') return '';
   const count = selectPlans(state.requests, { ...discovery, savedOnly: state.discoverFilter === 'saved', savedIds: state.savedPlanIds }).length;
-  return `${count} ${count === 1 ? 'plan' : 'plans'} to make room for`;
+  return `${count} ${count === 1 ? 'plan' : 'plans'} available`;
 }
 
 function discover() {
   const filter = state.discoverFilter || 'all';
-  return layout(`<div class="campus-topline"><span>YOUR CAMPUS <span class="campus-divider">/</span> SMALL POSSIBILITIES</span><button class="campus-text-action" onclick="go('home')">← Common room</button></div>
-    <section class="discovery-heading"><div><span class="eyebrow">FIND YOUR KIND OF COMPANY</span><h1>Less “we should.”<br><em>More “see you there.”</em></h1><p>Pick a shared interest. Say hello. See where a small plan takes you.</p></div><button class="primary" onclick="openComposer()">＋ Create a plan</button></section>
+  return layout(`<section class="portal-heading"><div><h1>Discover</h1><p>Plans worth stepping out for.</p></div><button class="primary" onclick="openComposer()">＋ Create a plan</button></section>
     <section class="discovery-tools" aria-label="Filter campus plans"><div class="discovery-search-row"><label class="discovery-search"><span aria-hidden="true">⌕</span><input type="search" id="plan-search" value="${escapeHtml(discovery.query)}" placeholder="Try chai, library, badminton…" aria-label="Search activities or locations" oninput="searchCampusPlans(this.value)"></label><label class="discovery-select">When<select onchange="setPlanOption('when',this.value)">${[['any','Any time'],['today','Today'],['tomorrow','Tomorrow'],['week','Next 7 days']].map(([v,l])=>`<option value="${v}" ${discovery.when===v?'selected':''}>${l}</option>`).join('')}</select></label></div>
     <div class="activity-filters" role="group" aria-label="Activity type">${ACTIVITIES.map(a=>`<button aria-pressed="${discovery.category===a.id}" class="${discovery.category===a.id?'selected':''}" onclick="setPlanOption('category','${a.id}')">${a.icon} ${a.label}</button>`).join('')}</div></section>
-    <div class="discovery-results-bar"><div class="discovery-tabs"><button class="${filter==='all'?'selected':''}" aria-pressed="${filter==='all'}" onclick="setDiscoverFilter('all')">All plans</button><button class="${filter==='saved'?'selected':''}" aria-pressed="${filter==='saved'}" onclick="setDiscoverFilter('saved')">Saved for later</button></div><label class="discovery-sort">Sort by<select aria-label="Sort plans" onchange="setPlanOption('sort',this.value)"><option value="soonest" ${discovery.sort==='soonest'?'selected':''}>Happening soonest</option><option value="newest" ${discovery.sort==='newest'?'selected':''}>Recently posted</option></select></label></div>
+    <div class="discovery-results-bar"><div class="discovery-tabs"><button class="${filter==='all'?'selected':''}" aria-pressed="${filter==='all'}" onclick="setDiscoverFilter('all')">All plans</button><button class="${filter==='saved'?'selected':''}" aria-pressed="${filter==='saved'}" onclick="setDiscoverFilter('saved')">Saved</button></div><label class="discovery-sort">Sort by<select aria-label="Sort plans" onchange="setPlanOption('sort',this.value)"><option value="soonest" ${discovery.sort==='soonest'?'selected':''}>Happening soonest</option><option value="newest" ${discovery.sort==='newest'?'selected':''}>Recently posted</option></select></label></div>
     <p class="discovery-count" id="discovery-count" aria-live="polite">${discoveryCount()}</p><div class="request-grid all campus-plan-grid" id="discovery-results">${discoveryResults()}</div>
-    <div class="discovery-nudge"><span>Can’t find your kind of plan?</span><button class="campus-text-action" onclick="openComposer()">Someone else might be waiting for you to start it. ↗</button></div>`);
+    <div class="discovery-nudge"><span>Can’t find your kind of plan?</span><button class="campus-text-action" onclick="openComposer()">Create one ↗</button></div>`);
 }
 
 window.browseActivity = category => { discovery.category = category; state.discoverFilter = 'all'; go('discover'); };
@@ -934,8 +914,8 @@ function inbox() {
   return layout(`
     <section class="page-title compact">
       <span class="eyebrow">YOUR CONNECTIONS & PLANS</span>
-      <h1>A little closer.</h1>
-      <p>Your conversations, shared plans, and next possibilities.</p>
+      <h1>Inbox</h1>
+      <p>Conversations and invitations.</p>
     </section>
 
     <div class="inbox-tabs">
@@ -985,7 +965,7 @@ function inbox() {
       ${state.matches.length === 0 && state.pendingApplications.length === 0 ? `
         <div class="empty-inbox">
           <span>✦</span>
-          <h2>Every connection starts somewhere.</h2>
+          <h2>No conversations yet</h2>
           <p>When someone accepts your interest or you accept theirs, your private chat will appear here.</p>
           <button class="primary" onclick="go('discover')">Explore plans</button>
         </div>
@@ -1041,75 +1021,9 @@ function inbox() {
 }
 
 function safety() {
-  const me = state.me;
-
-  return layout(`
-    <section class="page-title compact">
-      <span class="eyebrow">CAMPUS TRUST & SAFETY</span>
-      <h1>Safety & Trust</h1>
-      <p>Transparent community standards, student anonymity guarantees, and zero tolerance policies.</p>
-    </section>
-
-    ${me?.isAdmin ? `
-      <div class="admin-callout-banner" style="background: linear-gradient(135deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 12px; padding: 16px 20px; margin: 24px 0 10px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; color: #fff;">
-        <div style="display:flex;align-items:center;gap:12px;">
-          <span style="font-size:24px;">🛡️</span>
-          <div>
-            <strong style="font-size:14px;color:#fff;display:block;">Campus Moderator Privileges Active</strong>
-            <small style="color:#94a3b8;font-size:12px;">You have administrator access to the Incident Review Queue and Moderator Team Management.</small>
-          </div>
-        </div>
-        <button class="primary" onclick="go('admin')" style="background:#38bdf8;color:#0f172a;border:none;font-weight:700;padding:8px 16px;border-radius:8px;font-size:12.5px;cursor:pointer;white-space:nowrap;">
-          Open Admin Portal ⚡
-        </button>
-      </div>
-    ` : ''}
-
-    <div class="safety-grid">
-      <article>
-        <i>◉</i>
-        <h3>Anonymous by default</h3>
-        <p>Your institutional email and legal identity are never visible to other students in campus rooms or discovery.</p>
-      </article>
-      <article>
-        <i>♢</i>
-        <h3>Mutual reveal only</h3>
-        <p>Real identities are exchanged only when both students mutually agree inside a confirmed 1-on-1 private connection.</p>
-      </article>
-      <article>
-        <i>⚑</i>
-        <h3>One-tap instant reporting</h3>
-        <p>Every message can be reported anonymously. Campus moderators review reports with contextual chat windows to take prompt action.</p>
-      </article>
-    </div>
-
-    <section class="report-box" style="margin-top: 24px;">
-      <div>
-        <span class="eyebrow">CAMPUS CODE</span>
-        <h2>Community Standards & Zero Tolerance</h2>
-        <p>Our platform maintains zero tolerance for harassment, hate speech, bullying, academic dishonesty, or non-consensual disclosure.</p>
-      </div>
-      <button class="primary" onclick="openGuidelines()">View Guidelines</button>
-    </section>
-
-    <div style="margin-top: 28px; background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 24px;">
-      <h3 style="font: 600 20px 'Playfair Display'; margin: 0 0 8px;">How Incident Review Works</h3>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 16px;">
-        <div style="background: #fbfcf9; border: 1px solid var(--line); border-radius: 10px; padding: 14px;">
-          <b style="font-size: 13.5px; color: var(--ink); display: block; margin-bottom: 4px;">1. Tap to Flag</b>
-          <p style="font-size: 12px; color: var(--muted); margin: 0; line-height: 1.5;">Hover or hold any inappropriate message in chat and tap "Report" with the specific category.</p>
-        </div>
-        <div style="background: #fbfcf9; border: 1px solid var(--line); border-radius: 10px; padding: 14px;">
-          <b style="font-size: 13.5px; color: var(--ink); display: block; margin-bottom: 4px;">2. Contextual Review</b>
-          <p style="font-size: 12px; color: var(--muted); margin: 0; line-height: 1.5;">Authorized moderators review the surrounding conversation (5 messages before and 5 after) to make fair decisions.</p>
-        </div>
-        <div style="background: #fbfcf9; border: 1px solid var(--line); border-radius: 10px; padding: 14px;">
-          <b style="font-size: 13.5px; color: var(--ink); display: block; margin-bottom: 4px;">3. Swift Resolution</b>
-          <p style="font-size: 12px; color: var(--muted); margin: 0; line-height: 1.5;">Violating messages are removed and repeat offenders receive temporary timeouts or permanent bans.</p>
-        </div>
-      </div>
-    </div>
-  `);
+  return layout(`<section class="portal-heading"><div><h1>Trust & safety</h1><p>Stay in control of your experience.</p></div><button class="secondary" onclick="openGuidelines()">Community guidelines</button></section>
+    <div class="safety-grid"><article><i>${icons.settings}</i><h3>Your public identity</h3><p>Other students see your alias. Your university email stays private.</p></article><article><i>${icons.inbox}</i><h3>Sharing is mutual</h3><p>Reveal your identity in a private conversation when you both agree.</p></article><article><i>${icons.safety}</i><h3>Report a concern</h3><p>Open a message’s actions and choose Report. Moderators review the context.</p></article></div>
+    <section class="preference-group safety-details"><h2>Good to know</h2><details><summary>Meeting in person</summary><p>Choose a public campus location, let a friend know your plans, and leave whenever you feel uncomfortable.</p></details><details><summary>What happens after a report?</summary><p>Authorized moderators review the reported message and surrounding conversation. They may remove content, issue a warning, or restrict an account.</p></details><details><summary>Community expectations</summary><p>Respect consent and privacy. Harassment, hate speech, bullying, and sharing someone’s identity without permission are not welcome.</p></details></section>`);
 }
 
 function adminPortal() {
@@ -1287,8 +1201,8 @@ function adminPortal() {
     <div class="admin-portal-wrapper">
       <section class="admin-header-card">
         <div class="admin-header-left">
-          <span class="admin-eyebrow-pill">CAMPUS MODERATION & GOVERNANCE</span>
-          <h1 class="admin-title">Admin & Moderation Portal</h1>
+          <span class="admin-eyebrow-pill">STAFF WORKSPACE</span>
+          <h1 class="admin-title">Moderation</h1>
           <div class="admin-meta-row">
             <span>Signed in as <b>${escapeHtml(me.email || me.username)}</b></span>
             <span class="admin-dot-sep">·</span>
@@ -1297,7 +1211,7 @@ function adminPortal() {
         </div>
         <div class="admin-header-actions">
           <button type="button" class="admin-btn-secondary" onclick="loadAdminData()" title="Reload reports and staff list">
-            ↻ Refresh Queue
+            ↻ Refresh
           </button>
         </div>
       </section>
@@ -1305,13 +1219,13 @@ function adminPortal() {
       <div class="admin-toolbar-row">
         <div class="admin-view-tabs">
           <button type="button" class="admin-view-tab ${tab === 'reports' ? 'active' : ''}" onclick="setAdminTab('reports')">
-            🛡️ Incident Reports ${pendingCount > 0 ? `<span class="tab-counter urgent">${pendingCount}</span>` : `<span class="tab-counter">${totalReportsCount}</span>`}
+            Reports ${pendingCount > 0 ? `<span class="tab-counter urgent">${pendingCount}</span>` : `<span class="tab-counter">${totalReportsCount}</span>`}
           </button>
           <button type="button" class="admin-view-tab ${tab === 'verifications' ? 'active' : ''}" onclick="setAdminTab('verifications')">
-            📸 Student Verifications ${(state.adminVerifications?.length || 0) > 0 ? `<span class="tab-counter urgent">${state.adminVerifications.length}</span>` : `<span class="tab-counter">0</span>`}
+            Verification ${(state.adminVerifications?.length || 0) > 0 ? `<span class="tab-counter urgent">${state.adminVerifications.length}</span>` : `<span class="tab-counter">0</span>`}
           </button>
           <button type="button" class="admin-view-tab ${tab === 'moderators' ? 'active' : ''}" onclick="setAdminTab('moderators')">
-            👥 Moderator Team <span class="tab-counter">${totalStaffCount}</span>
+            Team <span class="tab-counter">${totalStaffCount}</span>
           </button>
         </div>
 
@@ -1334,24 +1248,24 @@ function adminPortal() {
         <div class="admin-reports-panel">
           ${state.adminLoading ? `
             <div class="admin-empty-state" style="padding: 40px; text-align: center; background:#fff; border-radius:14px; border:1px solid var(--line);">
-              <p style="color: var(--muted); margin:0;">Loading incidents & contextual chat transcripts...</p>
+              <p style="color: var(--muted); margin:0;">Loading reports…</p>
             </div>
           ` : allUserGroups.length === 0 ? `
             <div class="admin-empty-state" style="padding: 50px 20px; text-align: center; background: #fff; border-radius: 14px; border: 1px dashed var(--line);">
               <span style="font-size: 38px;">🛡️</span>
-              <h3 style="margin: 10px 0 6px; font: 600 20px 'Playfair Display';">Queue is clear!</h3>
+              <h3 style="margin: 10px 0 6px; font: 600 20px 'Playfair Display';">No reports to review</h3>
               <p style="color: var(--muted); font-size: 13px; max-width: 420px; margin: 0 auto;">
-                ${filter === 'pending' ? 'No pending incident reports. All campus interactions are currently in good standing.' : 'No incident reports match this filter.'}
+                ${filter === 'pending' ? 'There are no pending reports.' : 'No incident reports match this filter.'}
               </p>
             </div>
           ` : state.adminSelectedUserId ? `
             <div class="admin-dossier-wrapper">
               <div class="admin-dossier-nav-bar">
                 <button type="button" class="admin-back-btn" onclick="clearAdminUserSelection()">
-                  ← Back to Reported Users Table
+                  ← Back to reports
                 </button>
                 <div style="font: 500 12px 'DM Sans'; color: var(--muted);">
-                  Viewing Incident Dossier for <b>${escapeHtml(allUserGroups.find(g => g.userId === state.adminSelectedUserId)?.user?.publicAlias || 'Student')}</b>
+                  Reports for <b>${escapeHtml(allUserGroups.find(g => g.userId === state.adminSelectedUserId)?.user?.publicAlias || 'Student')}</b>
                 </div>
               </div>
               ${(() => {
@@ -1359,7 +1273,7 @@ function adminPortal() {
                 return selectedGroup ? renderAdminUserGroup(selectedGroup) : `
                   <div class="admin-empty-state" style="padding: 30px; text-align: center; background: #fff; border-radius: 12px; border: 1px dashed var(--line);">
                     <p style="color: var(--muted); margin-bottom: 12px;">This student has no reports under the current filter (${filter}).</p>
-                    <button type="button" class="admin-back-btn" onclick="clearAdminUserSelection()">← Back to Reported Users Table</button>
+                    <button type="button" class="admin-back-btn" onclick="clearAdminUserSelection()">← Back to reports</button>
                   </div>
                 `;
               })()}
@@ -1374,7 +1288,7 @@ function adminPortal() {
                     type="text" 
                     id="admin-search-box"
                     class="admin-search-input" 
-                    placeholder="Search student by username, alias, or email..." 
+                    placeholder="Search students or reports…"
                     value="${escapeHtml(state.adminSearch || '')}"
                     oninput="setAdminSearch(this.value)"
                   />
@@ -1384,7 +1298,7 @@ function adminPortal() {
                 </div>
 
                 <button type="button" class="admin-filter-toggle-btn ${state.adminFiltersOpen || activeFilterCount > 0 ? 'active' : ''}" onclick="toggleAdminFilters()">
-                  <span>⚙️ Filters</span>
+                  <span>Filters</span>
                   ${activeFilterCount > 0 ? `<span class="filter-count-badge">${activeFilterCount}</span>` : ''}
                   <span class="filter-arrow">${state.adminFiltersOpen ? '▲' : '▼'}</span>
                 </button>
@@ -2433,291 +2347,31 @@ function getDeviceDescription() {
   return { os, browser, icon: isMobile ? '📱' : '💻', label: `${os} · ${browser}` };
 }
 
+window.toggleSettingsSound = () => { window.toggleSoundMute(); render(); };
+window.toggleSettingsNotifications = () => { window.toggleNotificationsMute(); render(); };
+window.enableSettingsNotifications = async () => { await window.requestNotificationPermission(); render(); };
+
 function settings() {
   const me = state.me;
-  const username = me?.username || 'Anonymous';
-  const campus = me?.university || 'NIIT University';
-  const isMuted = isNotificationsMuted();
   const granted = 'Notification' in window && Notification.permission === 'granted';
-  const isOn = granted && !isMuted;
+  const isOn = granted && !isNotificationsMuted();
   const soundOn = !isSoundMuted();
   const device = getDeviceDescription();
-
-  return layout(`
-    <section class="page-title compact">
-      <span class="eyebrow">PREFERENCES & IDENTITY</span>
-      <h1>Make yourself at home.</h1>
-      <p>Your identity, your preferences, your corner of campus.</p>
-    </section>
-
-    <div class="settings-grid" style="display:grid;gap:20px;margin-top:28px;max-width:820px;">
-      ${me?.isAdmin ? `
-        <!-- Admin & Moderation Gateway -->
-        <div class="settings-card" style="background: linear-gradient(135deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 14px; padding: 22px; color: #fff;">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
-            <div>
-              <span style="font: 700 10.5px 'DM Mono'; color: #38bdf8; letter-spacing: 1px; display: block; margin-bottom: 4px;">PRIVILEGED STAFF ACCESS</span>
-              <h3 style="font: 600 20px 'Playfair Display'; margin: 0 0 4px; color: #fff;">Admin & Incident Review Portal</h3>
-              <p style="font-size: 12.5px; color: #94a3b8; margin: 0;">Review flagged student messages with 11-message contextual transcripts and manage your moderator team.</p>
-            </div>
-            <button class="primary" onclick="go('admin')" style="background: #38bdf8; color: #0f172a; border: none; font-weight: 700; padding: 9px 16px; border-radius: 8px; cursor: pointer; white-space: nowrap;">
-              Open Admin Portal ⚡
-            </button>
-          </div>
-        </div>
-      ` : ''}
-
-      <!-- Section 1: Campus Identity Card -->
-      <div class="settings-card" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-          <div>
-            <h3 style="font:600 20px 'Playfair Display';margin:0 0 4px;">Campus Credentials</h3>
-            <p style="font-size:12.5px;color:var(--muted);margin:0;">Your verified academic standing and anonymous pseudonym.</p>
-          </div>
-          <span style="font-size:24px;">🎓</span>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;background:#fbfcf9;border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:0;">
-          <div>
-            <span style="font:10px 'DM Mono';color:var(--muted);letter-spacing:.8px;display:block;">STUDENT STANDING</span>
-            <b style="font-size:14px;color:var(--ink);display:block;margin-top:4px;">${campus}</b>
-            ${me?.isVerified ? `
-              <span style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;color:var(--green);font-weight:600;margin-top:6px;">
-                ${renderVerifiedBadgeSvg(14)} Verified College Student
-              </span>
-            ` : (me?.verificationStatus === 'pending' ? `
-              <span style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;color:#d97706;font-weight:600;margin-top:6px;">
-                ⏳ Under Verification
-              </span>
-            ` : (me?.verificationStatus === 'rejected' ? `
-              <span style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;color:#dc2626;font-weight:600;margin-top:6px;">
-                ✕ Unverified Student Profile
-              </span>
-            ` : `
-              <span style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;">
-                🛡️ Unverified Student Profile
-              </span>
-            `))}
-          </div>
-          <div>
-            <span style="font:10px 'DM Mono';color:var(--muted);letter-spacing:.8px;display:block;">CURRENT PSEUDONYM</span>
-            <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
-              ${avatar(me?.avatarConfig || username, true, Boolean(me?.isVerified))}
-              <b style="font-size:14px;color:var(--ink);display:inline-flex;align-items:center;gap:4px;">
-                ${username}
-                ${me?.isVerified ? renderVerifiedBadgeSvg(13) : ''}
-              </b>
-            </div>
-            <span style="display:block;font-size:11.5px;color:var(--muted);margin-top:6px;">${me?.isVerified ? 'Verified Student Profile' : 'Awaiting Face Verification'}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Verification Section -->
-      <div class="settings-card" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-          <div>
-            <h3 style="font:600 20px 'Playfair Display';margin:0 0 4px;">Student Verification</h3>
-            <p style="font-size:12.5px;color:var(--muted);margin:0;">Catfish-free campus pairing with live ephemeral face &amp; gesture verification.</p>
-          </div>
-          <span style="font-size:24px;">🛡️</span>
-        </div>
-
-        ${me?.isVerified ? `
-          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
-            <div style="display:flex;align-items:center;gap:14px;">
-              <div style="width:40px;height:40px;border-radius:50%;background:#dcfce7;color:#15803d;display:grid;place-items:center;font-size:20px;flex-shrink:0;">
-                ✓
-              </div>
-              <div>
-                <strong style="font-size:14px;color:#166534;display:block;margin-bottom:2px;">Identity &amp; Gender Authenticated</strong>
-                <span style="font-size:12px;color:#15803d;">
-                  Verified as <b>${me?.gender === 'woman' ? 'Woman 👩' : (me?.gender === 'man' ? 'Man 👨' : me?.gender || 'Student')}</b> · Gender permanently locked
-                </span>
-              </div>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <span class="stats-pill" style="background:#dcfce7;color:#15803d;border-color:#86efac;font-size:12px;padding:6px 14px;font-weight:600;display:inline-flex;align-items:center;gap:5px;">
-                ${renderVerifiedBadgeSvg(13)} Verified College Student
-              </span>
-            </div>
-          </div>
-        ` : me?.verificationStatus === 'pending' ? `
-          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
-            <div style="display:flex;align-items:center;gap:14px;">
-              <div style="width:42px;height:42px;border-radius:50%;background:#dcfce7;color:#15803d;display:grid;place-items:center;font-size:22px;flex-shrink:0;">
-                ⏳
-              </div>
-              <div>
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
-                  <strong style="font-size:14px;color:#14532d;">Profile Under Verification</strong>
-                  <span style="background:#dcfce7;color:#15803d;border:1px solid #86efac;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;">In Progress</span>
-                </div>
-                <span style="font-size:12.5px;color:#166534;line-height:1.4;display:block;">
-                  Your verification has been submitted. It's now under verification — once verified, your blue student badge will activate and you can fully enjoy Afterclass!
-                </span>
-              </div>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;">
-              <button type="button" class="secondary" onclick="loadMe().then(() => toast('Verification status checked ✓'))" style="font-size:12px;padding:6px 14px;background:#fff;">
-                🔄 Refresh Status
-              </button>
-              <button type="button" class="secondary" onclick="openVerificationModal()" style="font-size:12px;padding:6px 12px;background:#fff;">
-                📸 Retake
-              </button>
-            </div>
-          </div>
-        ` : `
-          <div style="background:#fcfdfa;border:1px dashed #c2d1c6;border-radius:12px;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
-            <div style="max-width:500px;">
-              <strong style="font-size:14px;color:var(--ink);display:block;margin-bottom:4px;">Student Verification · Verified Blue Badge</strong>
-              <p style="font-size:12.5px;color:var(--muted);margin:0;line-height:1.45;">
-                Take a quick 5-second live selfie with a fun gesture (e.g. ✌️ peace sign). Your profile will go under verification, and right after that you can enjoy Afterclass with your verified student badge!
-              </p>
-              <div style="margin-top:6px;font-size:11.5px;color:#059669;display:flex;align-items:center;gap:6px;">
-                <span>🔒 Zero permanent storage: compressed in your browser and permanently deleted right after verification.</span>
-              </div>
-            </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-              <button type="button" class="primary" onclick="openVerificationModal()" style="white-space:nowrap;padding:11px 20px;font-weight:700;display:inline-flex;align-items:center;gap:6px;">
-                <span>📸</span> Start Live Face Verification
-              </button>
-              ${me?.isAdmin ? `
-                <button type="button" class="admin-btn-secondary" onclick="handleAdminSelfVerify()" style="white-space:nowrap;padding:10px 12px;font-weight:500;font-size:11.5px;background:#0f172a;color:#38bdf8;border:1px solid #38bdf8;border-radius:8px;cursor:pointer;" title="Skip camera with instant admin bypass">
-                  ⚡ Skip Camera (Admin Bypass)
-                </button>
-              ` : ''}
-            </div>
-          </div>
-        `}
-      </div>
-
-      <!-- Section 2: Notifications & Mechanical Switch -->
-      <div class="settings-card" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-          <div>
-            <h3 style="font:600 20px 'Playfair Display';margin:0 0 4px;">Live Push Alerts</h3>
-            <p style="font-size:12.5px;color:var(--muted);margin:0;">Instant browser push alerts for plan applications and direct messages.</p>
-          </div>
-          <span style="font-size:24px;">🔔</span>
-        </div>
-
-        <div id="settings-notif-card" style="background:#f6f8f5;border:1px solid var(--line);border-radius:12px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;">
-          <div style="text-align:left;">
-            <strong style="font-size:14px;color:var(--ink);display:block;margin-bottom:2px;">Master Push Notifications</strong>
-            <small style="color:var(--muted);font-size:12px;">
-              ${!('Notification' in window) ? 'Not supported on device' : (!granted ? 'Click switch to enable push alerts' : (isOn ? 'Power ON · Alerts active and delivered in real-time' : 'Power OFF · Alerts muted'))}
-            </small>
-          </div>
-          <div class="real-switch-casing ${isOn ? 'on' : 'off'}" onclick="${!granted ? 'requestNotificationPermission()' : 'toggleNotificationsMute()'}" title="${isOn ? 'Switch ON (Click to turn OFF)' : 'Switch OFF (Click to turn ON)'}" role="button" tabindex="0">
-            <div class="real-switch-well">
-              <div class="real-rocker-paddle">
-                <div class="paddle-half paddle-top">
-                  <span class="lens-pilot-dot"></span>
-                  <span class="debossed-symbol symbol-on">|</span>
-                </div>
-                <div class="paddle-pivot-ridge"></div>
-                <div class="paddle-half paddle-bottom">
-                  <span class="debossed-symbol symbol-off">○</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Section 3: Audio & Sound Effects -->
-      <div class="settings-card" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-          <div>
-            <h3 style="font:600 20px 'Playfair Display';margin:0 0 4px;">Audio & Sound Effects</h3>
-            <p style="font-size:12.5px;color:var(--muted);margin:0;">Real-time messaging pops, reveal chimes, and celebration effects.</p>
-          </div>
-          <span style="font-size:24px;">🔊</span>
-        </div>
-
-        <div id="settings-sound-card" style="background:#f6f8f5;border:1px solid var(--line);border-radius:12px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;">
-          <div style="text-align:left;">
-            <strong style="font-size:14px;color:var(--ink);display:block;margin-bottom:2px;">In-App Audio Effects</strong>
-            <small style="color:var(--muted);font-size:12px;">
-              ${soundOn ? 'Audio ON · High-fidelity chimes and feedback sounds' : 'Audio OFF · All in-app sound effects muted'}
-            </small>
-          </div>
-          <div class="real-switch-casing ${soundOn ? 'on' : 'off'}" onclick="toggleSoundMute()" title="${soundOn ? 'Sound ON (Click to turn OFF)' : 'Sound OFF (Click to turn ON)'}" role="button" tabindex="0">
-            <div class="real-switch-well">
-              <div class="real-rocker-paddle">
-                <div class="paddle-half paddle-top">
-                  <span class="lens-pilot-dot"></span>
-                  <span class="debossed-symbol symbol-on">|</span>
-                </div>
-                <div class="paddle-pivot-ridge"></div>
-                <div class="paddle-half paddle-bottom">
-                  <span class="debossed-symbol symbol-off">○</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Section 4: Session Management & Device Security -->
-      <div class="settings-card" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-          <div>
-            <h3 style="font:600 20px 'Playfair Display';margin:0 0 4px;">Session Management & Devices</h3>
-            <p style="font-size:12.5px;color:var(--muted);margin:0;">Manage active logins across campus library PCs, personal laptops, and phones.</p>
-          </div>
-          <span style="font-size:24px;">🔐</span>
-        </div>
-
-        <!-- Current Device Card -->
-        <div style="background:#fbfcf9;border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;">
-          <div style="display:flex;align-items:center;gap:12px;">
-            <div style="width:40px;height:40px;border-radius:10px;background:#edf4ea;border:1px solid #cce8d5;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">
-              ${device.icon}
-            </div>
-            <div>
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                <strong style="font-size:13.5px;color:var(--ink);">${device.label}</strong>
-                <span class="status-badge active" style="font-size:10.5px;padding:2px 8px;">🟢 This Device (Active)</span>
-              </div>
-              <small style="color:var(--muted);font-size:11.5px;display:block;margin-top:2px;">Signed in as <b>${username}</b> · Session valid</small>
-            </div>
-          </div>
-          ${me ? `
-            <button class="secondary" onclick="logout()" style="font-size:12px;padding:7px 13px;border-radius:8px;white-space:nowrap;">
-              Log Out of This Device ⇥
-            </button>
-          ` : ''}
-        </div>
-
-        <!-- Global Invalidation Card -->
-        <div style="background:#fff7ed;border:1px solid #ffedd5;border-radius:12px;padding:16px;display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
-          <div style="max-width:480px;">
-            <strong style="font-size:13.5px;color:#9a3412;display:flex;align-items:center;gap:6px;margin-bottom:2px;">
-              <span>⚡</span> Sign Out of All Devices
-            </strong>
-            <p style="font-size:11.5px;color:#c2410c;margin:0;line-height:1.4;">
-              Left your account open on a college computer, lab laptop, or another phone? Instantly terminate all active sessions globally.
-            </p>
-          </div>
-          ${me ? `
-            <button class="primary" onclick="openLogoutAllModal()" style="background:#ea580c;border:none;font-size:12px;font-weight:600;padding:8px 14px;border-radius:8px;white-space:nowrap;cursor:pointer;color:#fff;">
-              Sign Out Everywhere ⚡
-            </button>
-          ` : ''}
-        </div>
-
-        <!-- Local Cache -->
-        <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--line);padding-top:14px;">
-          <small style="color:var(--muted);font-size:12px;">Local preferences, drafts, and cached thumbnails.</small>
-          <button class="link" onclick="clearLocalCache()" style="font-size:12px;color:#d5573e;text-decoration:underline;">
-            Clear Local Cache
-          </button>
-        </div>
-      </div>
-    </div>
-  `);
+  const row = (title, description, control) => `<div class="preference-row"><div><strong>${title}</strong><small>${description}</small></div>${control}</div>`;
+  return layout(`<section class="portal-heading"><div><h1>Settings</h1><p>Your account, your preferences.</p></div></section>
+    <div class="account-layout"><div class="account-summary">${avatar(me?.avatarConfig || me?.username || 'Guest',false,Boolean(me?.isVerified))}<h2>${escapeHtml(me?.username || 'Guest')}</h2><p>${escapeHtml(me?.university || 'NIIT University')}</p><span class="account-status">${me?.isVerified ? 'Verified student' : me ? 'Student account' : 'Not signed in'}</span><button class="secondary" onclick="${me?'openAvatarPreview()':'openAuth()'}">${me?'View profile':'Sign in'}</button>${me?.isAdmin?`<button class="account-admin" onclick="go('admin')">Moderation workspace ↗</button>`:''}</div>
+    <div class="account-sections"><section class="preference-group"><h2>Profile & privacy</h2>
+      ${row('Campus alias','Your public name on Afterclass.',`<span>${escapeHtml(me?.username || 'Guest')}</span>`)}
+      ${row('Student verification',me?.isVerified?'Your student profile is verified.':me?.verificationStatus==='pending'?'Your submission is awaiting review.':me?.verificationStatus==='rejected'?'Submit a new photo for review.':'Verify your student profile.',me?.isVerified?'<span class="account-status">Verified</span>':me?`<div class="preference-actions">${me.verificationStatus==='pending'?`<button class="secondary" onclick="loadMe()">Check status</button>`:''}<button class="secondary" onclick="openVerificationModal()">${me.verificationStatus==='pending'?'Retake':'Verify'}</button></div>`:`<button class="secondary" onclick="openAuth()">Sign in</button>`)}
+      ${row('Identity sharing','Reveal your identity only when you both agree.',`<button class="link" onclick="go('safety')">Privacy & safety ↗</button>`)}
+    </section><section class="preference-group"><h2>Notifications</h2>
+      ${row('Push notifications',!('Notification' in window)?'Not supported in this browser.':Notification.permission==='denied'?'Blocked in browser settings.':'Messages and plan invitations.',`<button class="preference-switch" role="switch" aria-label="Push notifications" aria-checked="${isOn}" onclick="${granted?'toggleSettingsNotifications()':'enableSettingsNotifications()'}" ${!('Notification' in window)?'disabled':''}><span></span></button>`)}
+      ${row('Sound effects','Play sounds for in-app activity.',`<button class="preference-switch" role="switch" aria-label="Sound effects" aria-checked="${soundOn}" onclick="toggleSettingsSound()"><span></span></button>`)}
+    </section><section class="preference-group"><h2>Session & device</h2>
+      ${row(escapeHtml(device.label),me?'This device · Signed in':'This device · Guest',me?`<button class="secondary" onclick="logout()">Sign out</button>`:`<button class="secondary" onclick="openAuth()">Sign in</button>`)}
+      ${me?row('Other devices','End all active sessions.',`<button class="link destructive" onclick="openLogoutAllModal()">Sign out everywhere</button>`):''}
+      ${row('Local preferences','Reset notification and sound preferences.',`<button class="link" onclick="clearLocalCache()">Reset</button>`)}
+    </section></div></div>`);
 }
 
 window.switchAuthShowcase = function(tab) {
