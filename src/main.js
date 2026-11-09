@@ -11,7 +11,7 @@ import './forms.css';
 import './emoji-moments.css';
 import './emoji-picker.css';
 import { EMOJI_CATEGORIES, selectEmojis } from './emoji-catalog.mjs';
-import { emojiMood, playEmojiMoment } from './emoji-moments.mjs';
+import { emojiCount, playEmojiMoment } from './emoji-moments.mjs';
 import { createAdminLoader } from './admin-loader.mjs';
 import { ACTIVITIES, activityFor, selectPlans, planTime } from './discovery.mjs';
 import 'leaflet/dist/leaflet.css';
@@ -420,7 +420,8 @@ function parseMessageContent(raw) {
 
 function formatChatBody(text) {
   const content = formatMessageContent(text);
-  return emojiMood(text) ? `<span class="emoji-message-content">${content}</span>` : content;
+  const count = emojiCount(text);
+  return count ? `<span class="emoji-message-content" data-emoji-count="${count}">${content}</span>` : content;
 }
 
 function animateLiveEmoji(container, message) {

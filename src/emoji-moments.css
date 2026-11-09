@@ -1,5 +1,22 @@
-.emoji-message-content { display:inline-flex;align-items:center;gap:3px;vertical-align:middle; }
+/* Emoji-only messages use the artwork's transparent silhouette. */
+.emoji-message-content { display:inline-flex;align-items:center;gap:4px;vertical-align:middle;line-height:1; }
+.experience-shell .message-body:has(> .emoji-message-content),
+.experience-shell .message.is-mine .message-body:has(> .emoji-message-content),
+.bubble-pill:has(> .emoji-message-content) {
+  background:transparent!important;border:0!important;box-shadow:none!important;padding:4px 0!important;
+}
+.emoji-message-content > img.ac-emoji { width:40px;height:40px; }
+.emoji-message-content[data-emoji-count="1"] > img.ac-emoji { width:76px;height:76px; }
+.emoji-message-content[data-emoji-count="2"] > img.ac-emoji { width:60px;height:60px; }
+.emoji-message-content[data-emoji-count="3"] > img.ac-emoji { width:52px;height:52px; }
 .emoji-actor { position:relative;display:inline-block;flex-shrink:0;vertical-align:middle;line-height:0; }
-.emoji-actor > img { display:block; }
-.emoji-actor-art { position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none; }
+.emoji-actor > img.ac-emoji { display:block;width:100%;height:100%; }
+.emoji-actor-art { position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none; }
+@media(max-width:480px){
+  .emoji-message-content { gap:2px; }
+  .emoji-message-content > img.ac-emoji { width:32px;height:32px; }
+  .emoji-message-content[data-emoji-count="1"] > img.ac-emoji { width:68px;height:68px; }
+  .emoji-message-content[data-emoji-count="2"] > img.ac-emoji { width:56px;height:56px; }
+  .emoji-message-content[data-emoji-count="3"] > img.ac-emoji { width:48px;height:48px; }
+}
 @media(prefers-reduced-motion:reduce){.emoji-actor-art{display:none}.emoji-actor>img{visibility:visible!important}}

@@ -1,4 +1,5 @@
 import catalog from './data/emoji-catalog.json' with { type: 'json' };
+import artwork from './data/emoji-artwork.json' with { type: 'json' };
 const escape = text => String(text).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const normalize = text => text.replace(/\uFE0F/g, '');
 const base = text => normalize(text.replace(/\p{Emoji_Modifier}/gu, ''));
@@ -10,10 +11,19 @@ export const EMOJI_CATEGORIES = [
 ].map(([id,label,emoji])=>({id,label,emoji}));
 const specialTags = {'😂':'lol lmao funny laugh','🤣':'lol lmao funny laugh','😊':'happy smile warm','🥳':'party birthday celebrate','👍':'yes ok approve like','❤️':'love heart','😢':'sad cry tears','😭':'sad cry sob','🙏':'please thanks thank prayer namaste','☕':'chai tea coffee','💯':'hundred perfect','🎉':'party congratulations celebrate'};
 for (const item of EXPRESSIONS) item.t = `${item.n} ${specialTags[item.e]||''}`.toLowerCase();
+export function emojiArtwork(value) {
+ const item = lookup.get(normalize(String(value)));
+ if (!item) return null;
+ if (Object.hasOwn(artwork, item.file)) {
+   const base = `/emoji/fluent-3d-v1/${item.file}`;
+   return { still: `${base}.webp`, animation: artwork[item.file] ? `${base}-motion.webp` : null, duration: artwork[item.file] };
+ }
+ return { still: `/emoji/twemoji-17.0.3/${item.file}.svg`, animation: null, duration: 0 };
+}
 export function expressionArt(value, { lazy = false } = {}) {
  const item = lookup.get(normalize(String(value)));
  if (!item) return escape(value);
- return `<img class="ac-expression ac-emoji" src="/emoji/twemoji-17.0.3/${item.file}.svg" alt="${escape(value)}" aria-label="${escape(item.n)}" width="32" height="32" draggable="false" decoding="async"${lazy?' loading="lazy"':''}>`;
+ return `<img class="ac-expression ac-emoji" src="${emojiArtwork(value).still}" alt="${escape(value)}" aria-label="${escape(item.n)}" width="32" height="32" draggable="false" decoding="async"${lazy?' loading="lazy"':''}>`;
 }
 export function renderExpressions(escapedText) {
  return [...segmenter.segment(String(escapedText))].map(({segment}) => lookup.has(normalize(segment)) ? expressionArt(segment) : segment).join('');

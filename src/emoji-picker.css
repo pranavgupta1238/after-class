@@ -10,9 +10,9 @@ img.ac-emoji { object-fit:contain; opacity:1; filter:none; background:transparen
 #chat-media-tray .emoji-category-chip img { width:22px;height:22px; }
 #chat-media-tray .media-tray-body { min-height:100px;max-height:300px;padding:10px 12px;display:block;overscroll-behavior:contain; }
 #chat-media-tray .tray-section-title { font:500 11px 'DM Sans',sans-serif;letter-spacing:0;text-transform:none;margin:0 0 9px;color:var(--muted); }
-#chat-media-tray .standard-emoji-grid { grid-template-columns:repeat(8,minmax(0,1fr));gap:2px; }
-#chat-media-tray .std-emoji-btn { height:40px;min-width:0;padding:5px; }
-#chat-media-tray .std-emoji-btn img { width:30px;height:30px; }
+#chat-media-tray .standard-emoji-grid { grid-template-columns:repeat(7,minmax(0,1fr));gap:2px; }
+#chat-media-tray .std-emoji-btn { height:44px;min-width:0;padding:4px; }
+#chat-media-tray .std-emoji-btn img { width:36px;height:36px; }
 #chat-media-tray .std-emoji-btn:hover { transform:none;background:#edf1e7; }
 #chat-media-tray .std-emoji-btn:focus-visible { outline:2px solid var(--forest);outline-offset:-2px; }
 .emoji-picker-footer { display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid var(--line);padding:8px 12px;flex-shrink:0;background:#fafbf7;font:11px 'DM Sans',sans-serif; }
@@ -22,4 +22,4 @@ img.ac-emoji { object-fit:contain; opacity:1; filter:none; background:transparen
 .emoji-picker-footer a:hover { text-decoration:underline; }
 .emoji-load-more { display:block;width:100%;margin-top:12px;padding:9px;border:1px solid var(--line);border-radius:8px;background:#fafbf7;color:var(--forest);font:500 12px 'DM Sans',sans-serif;cursor:pointer; }
 .emoji-empty { font-size:13px;color:var(--muted);padding:20px 4px;line-height:1.6; }
-@media(max-width:480px){#chat-media-tray .std-emoji-btn{height:38px}#chat-media-tray .std-emoji-btn img{width:28px;height:28px}}
+@media(max-width:480px){#chat-media-tray .std-emoji-btn{height:42px}#chat-media-tray .std-emoji-btn img{width:34px;height:34px}}

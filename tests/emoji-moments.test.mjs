@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { emojiMood } from '../src/emoji-moments.mjs';
-import { emojiBehavior } from '../src/emoji-behaviors.mjs';
+import { emojiMood, emojiCount } from '../src/emoji-moments.mjs';
+import { emojiArtwork } from '../src/emoji-catalog.mjs';
 
 test('emoji-only messages preserve complete sequences, including mixed emotions', () => {
   for (const text of ['🥳', '🎉🎊', '  🥳 \n 🙌  ', '❤️', '💕🥰', '❤', '😭🤩🫠😜🥲', '😴😌', '😊', '👍🏽', '👨‍👩‍👧‍👦', '🇮🇳', '1️⃣', '🧑🏾‍💻']) {
@@ -16,12 +16,22 @@ test('ordinary text, markup, incomplete emoji and long emoji runs stay still', (
   assert.equal(emojiMood('😊'.repeat(6)), 'emoji');
 });
 
-test('each emoji chooses its own emotion or object behaviour', () => {
-  for (const [emoji, kind] of [['😭','sob'],['🥲','tear'],['😢','tear'],['😂','laugh'],['🫠','melt'],['🤩','starEyes'],['😜','tongue'],['😉','wink'],['😍','heartEyes'],['😴','sleep'],['🔥','fire'],['👋🏽','wave'],['❤️','heart'],['💔','heartbreak'],['🇮🇳','flag'],['☕','steam']]) {
-    assert.equal(emojiBehavior(emoji), kind, emoji);
-  }
+test('emotions use distinct authored animation files', () => {
+  const crying = emojiArtwork('😭'), laughing = emojiArtwork('😂'), melting = emojiArtwork('🫠');
+  assert.ok(crying.duration > 0 && laughing.duration > 0 && melting.duration > 0);
+  assert.notEqual(crying.animation, laughing.animation);
+  assert.notEqual(laughing.animation, melting.animation);
+  assert.ok(crying.animation.endsWith('-motion.webp'));
 });
 
-test('unmapped artwork remains still instead of receiving a generic bounce', () => {
-  for (const emoji of ['🧱','📁','1️⃣','👨‍👩‍👧‍👦']) assert.equal(emojiBehavior(emoji), null);
+test('emoji count treats compound sequences as one character for layout', () => {
+  assert.equal(emojiCount('👨‍👩‍👧‍👦'), 1);
+  assert.equal(emojiCount('👍🏽 🇮🇳'), 2);
+  assert.equal(emojiCount('hello 😭'), 0);
+  assert.equal(emojiCount('😭'.repeat(7)), 0);
+});
+
+test('unknown or non-animated emoji do not receive a generic effect', () => {
+  assert.equal(emojiArtwork('unknown'), null);
+  assert.equal(emojiArtwork('🇮🇳').animation, null);
 });
