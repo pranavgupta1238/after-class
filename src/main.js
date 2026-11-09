@@ -258,6 +258,7 @@ function setCachedMessages(messages) {
 
 const initialCachedUser = getCachedUser();
 let initialBootLoading = true;
+let bootConnectionFailed = false;
 
 const state = {
   view: getInitialBootView(),
@@ -5037,8 +5038,14 @@ window.submitReportForm = async (e, messageId) => {
 // ── Data Loaders ─────────────────────────────────────────────────────────────
 
 async function loadMe() {
+  initialBootLoading = true;
+  bootConnectionFailed = false;
+  render();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
   try {
-    const data = await api('/me');
+    const data = await api('/me', { signal: controller.signal });
+    if (!data.user) throw new Error('Invalid session response');
     updateMe(data.user);
     state.authLoading = false;
     if (state.view === 'auth') {
@@ -5071,8 +5078,11 @@ async function loadMe() {
     if (err.status === 401 || err.status === 403 || err.message === 'Authentication required' || err.message === 'Account unavailable') {
       updateMe(null);
       state.view = 'auth';
+    } else {
+      bootConnectionFailed = true;
     }
   } finally {
+    clearTimeout(timeout);
     initialBootLoading = false;
     render();
   }
@@ -5754,6 +5764,15 @@ function render() {
   if (!appEl) return;
   if (initialBootLoading) {
     appEl.innerHTML = renderSkeleton();
+    return;
+  }
+  if (bootConnectionFailed) {
+    appEl.innerHTML = `<main style="max-width:480px;margin:15vh auto;padding:24px;text-align:center" role="alert">
+      <h1>Unable to connect</h1>
+      <p>Afterclass couldn’t finish loading. The server may be starting up or temporarily unavailable.</p>
+      <button class="primary" id="retry-startup">Try again</button>
+    </main>`;
+    document.querySelector('#retry-startup').addEventListener('click', loadMe);
     return;
   }
   const currentView = views[state.view] || home;
