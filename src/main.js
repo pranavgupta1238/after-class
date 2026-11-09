@@ -4,6 +4,7 @@ import './experience.css';
 import './portal.css';
 import './theme.css';
 import './workspace.css';
+import './cards.css';
 import { createAdminLoader } from './admin-loader.mjs';
 import { ACTIVITIES, activityFor, selectPlans, planTime } from './discovery.mjs';
 import 'leaflet/dist/leaflet.css';
@@ -788,9 +789,9 @@ const discovery = { query: '', category: 'all', when: 'any', sort: 'soonest' };
 let discoverStatus = 'idle';
 
 function planLoadState() {
-  if (!state.me) return `<div class="campus-empty"><h3>Sign in to see plans</h3><p>Sign in with your university email to see student plans.</p><button class="primary" onclick="go('auth')">Join your campus</button></div>`;
-  if (discoverStatus === 'error') return `<div class="campus-empty" role="status"><span class="campus-empty-icon">↻</span><h3>We couldn’t load campus plans.</h3><p>Your connection may need a moment. Give it another try.</p><button class="primary" onclick="retryDiscover()">Try again</button></div>`;
-  if (discoverStatus === 'loading' || discoverStatus === 'idle') return `<div class="campus-empty" role="status"><span class="campus-empty-icon">✦</span><h3>Loading plans…</h3><p>Loading plans from your campus.</p></div>`;
+  if (!state.me) return planEmpty('Your campus is waiting', 'Sign in with your university email to see plans.', `<button class="ac-button ac-button-primary" onclick="go('auth')">Join your campus</button>`, 'people');
+  if (discoverStatus === 'error') return planEmpty('Plans couldn’t load', 'Please try again in a moment.', '<button class="ac-button" onclick="retryDiscover()">Try again</button>', 'repeat');
+  if (discoverStatus === 'loading' || discoverStatus === 'idle') return '<div class="ac-loading" role="status"><span></span>Loading campus plans…</div>';
   return '';
 }
 
@@ -814,26 +815,46 @@ function home() {
   </div>`);
 }
 
-function card(r) {
-  const isMine = state.me && r.host?.username === state.me.username;
-  const hasApplied = Boolean(r.hasApplied);
-  const isSaved = state.savedPlanIds?.has(r.id);
-  const activity = activityFor(r);
-  const id = escapeHtml(String(r.id));
-  return `<article class="plan-card campus-plan-card" data-category="${activity.id}">
-    <div class="plan-top"><span class="plan-category"><span>${uiIcon(activity.id)}</span>${activity.label}</span><button type="button" class="plan-bookmark-btn ${isSaved ? 'saved' : ''}" data-save-plan="${id}" aria-label="${isSaved ? 'Unsave' : 'Save'} ${escapeHtml(r.activity)}" aria-pressed="${Boolean(isSaved)}"><svg width="18" height="18" viewBox="0 0 24 24" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.7"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button></div>
-    <time class="plan-time" datetime="${escapeHtml(r.scheduledAt)}">${planTime(r.scheduledAt)}</time>
-    <h3>${escapeHtml(r.activity)}</h3><p class="plan-location">⌖ ${escapeHtml(r.location || 'Campus')}</p>
-    <div class="plan-host-row">${avatar(r.host?.username || 'Student')}<span>Hosted by <b>${escapeHtml(r.host?.username || 'Student')}</b></span></div>
-    <footer>${isMine ? '<span>Your plan</span>' : ''}${isMine ? `<button class="campus-text-action" onclick="go('inbox')">Manage</button>` : hasApplied ? '<button class="applied-btn" disabled>Interest sent ✓</button>' : `<button data-join-plan="${id}">I’m interested</button>`}</footer>
+function planPresentation(plan) {
+  const date = new Date(plan.scheduledAt);
+  const valid = Number.isFinite(date.getTime());
+  const expired = !valid || date <= new Date() || (plan.expiresAt && new Date(plan.expiresAt) <= new Date());
+  const active = (!plan.status || plan.status === 'open') && !expired;
+  const status = plan.status === 'matched' ? 'Matched' : plan.status === 'cancelled' ? 'Closed' : active ? 'Open invitation' : 'Expired';
+  return { date, valid, active, status, activity: activityFor(plan) };
+}
+
+function planCard(plan, owned = false) {
+  const { date, valid, active, status, activity } = planPresentation(plan);
+  const isMine = owned || (state.me && plan.host?.username === state.me.username);
+  const saved = Boolean(state.savedPlanIds?.has(plan.id));
+  const id = escapeHtml(String(plan.id));
+  const handlerId = escapeQuotes(String(plan.id));
+  const interests = Math.max(0, Number(plan.pendingApplicantsCount) || 0);
+  return `<article class="ac-plan ${owned ? 'ac-plan-owned' : ''}" data-category="${activity.id}">
+    <div class="ac-plan-cover"><span class="ac-plan-emblem" aria-hidden="true">${uiIcon(activity.id)}</span><span class="ac-plan-category">${activity.label}</span>
+      ${owned ? `<span class="ac-plan-status ${active ? 'is-open' : ''}">${status}</span>` : `<button class="ac-save ${saved ? 'is-saved' : ''}" data-save-plan="${id}" aria-label="${saved ? 'Unsave' : 'Save'} ${escapeHtml(plan.activity)}" aria-pressed="${saved}">${uiIcon('bookmark')}</button>`}
+    </div>
+    <div class="ac-plan-body"><div class="ac-plan-intro"><time class="ac-date" datetime="${escapeHtml(valid ? date.toISOString() : '')}" aria-label="${escapeHtml(valid ? date.toLocaleDateString([], { dateStyle: 'full' }) : 'Date not set')}"><span>${valid ? date.toLocaleDateString([], { month: 'short' }) : 'Date'}</span><strong>${valid ? date.getDate() : '—'}</strong></time><div class="ac-plan-copy"><h3>${renderExpressions(escapeHtml(plan.activity || 'Campus plan'))}</h3><p class="ac-plan-when">${valid ? `${date.toLocaleDateString([], { weekday: 'long' })} · ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${owned && !active ? ` · ${date.getFullYear()}` : ''}` : 'Time to be confirmed'}</p></div></div>
+      <p class="ac-plan-place">${uiIcon('pin')}<span>${escapeHtml(plan.location || 'Campus')}</span></p>
+    </div>
+    <div class="ac-plan-footer">${owned ? `<span class="ac-interest-count">${uiIcon('people')}${interests ? `${interests} interested` : active ? 'No interest yet' : 'No pending interest'}</span><div class="ac-plan-actions">${active ? `${interests ? `<button class="ac-button" onclick="viewPlanInterest()">View interest</button>` : ''}<button class="ac-button ac-button-quiet" onclick="closeMyPlan('${handlerId}')">Close plan</button>` : `<button class="ac-button" onclick="repeatMyPlan('${handlerId}')">${uiIcon('repeat')} Plan again</button>`}</div>` : `<div class="ac-plan-host">${avatar(plan.host?.username || 'Student')}<span>${escapeHtml(isMine ? 'Your invitation' : plan.host?.username || 'Student')}</span></div>${isMine ? '<button class="ac-button" onclick="manageMyPlans()">Manage plan</button>' : plan.hasApplied ? `<span class="ac-sent">${uiIcon('check')} Interest sent</span>` : `<button class="ac-button ac-button-primary" data-join-plan="${id}">I’m interested</button>`}`}</div>
   </article>`;
 }
+
+function card(plan) { return planCard(plan); }
+function planEmpty(title, detail, action = '<button class="ac-button ac-button-primary" onclick="openComposer()">Create a plan</button>', icon = 'calendar') {
+  return `<div class="ac-empty"><div class="ac-empty-art" aria-hidden="true">${uiIcon(icon)}</div><div><h2>${title}</h2><p>${detail}</p>${action}</div></div>`;
+}
+window.viewPlanInterest = () => { state.inboxTab = 'matches'; go('inbox'); render(); };
+window.manageMyPlans = () => { state.inboxTab = 'my-plans'; state.inboxPlanFilter = 'current'; go('inbox'); render(); };
 
 function discoveryResults() {
   const status = planLoadState();
   if (status) return status;
   const displayed = selectPlans(state.requests, { ...discovery, savedOnly: state.discoverFilter === 'saved', savedIds: state.savedPlanIds });
-  if (!displayed.length) return `<div class="campus-empty"><span class="campus-empty-icon">✳</span><h3>${state.discoverFilter === 'saved' ? 'Nothing saved yet' : 'No plans found'}</h3><p>${state.discoverFilter === 'saved' ? 'Save upcoming plans to find them here.' : 'Try another filter or create a plan.'}</p><div class="campus-actions"><button class="primary" onclick="openComposer()">Create a plan</button><button class="campus-text-action" onclick="resetDiscovery()">Reset filters</button></div></div>`;
+  if (!displayed.length) return planEmpty(state.discoverFilter === 'saved' ? 'Keep a plan in mind' : 'Make the first invitation', state.discoverFilter === 'saved' ? 'Saved plans will be right here when you need them.' : 'Try another filter, or start a plan of your own.', `<div class="ac-empty-actions"><button class="ac-button ac-button-primary" onclick="openComposer()">Create a plan</button><button class="ac-button ac-button-quiet" onclick="resetDiscovery()">Reset filters</button></div>`);
+
   return displayed.map(card).join('');
 }
 
@@ -937,114 +958,22 @@ function chat() {
 function inbox() {
   const activeTab = state.inboxTab || 'matches';
   const allPlans = state.myPlans || [];
-  const currentPlans = allPlans.filter(p => p.status === 'open' && new Date(p.scheduledAt) > new Date() && (!p.expiresAt || new Date(p.expiresAt) > new Date()));
+  const currentPlans = allPlans.filter(p => planPresentation(p).active);
   const pastPlans = allPlans.filter(p => !currentPlans.includes(p));
   const showPast = state.inboxPlanFilter === 'past';
   const visiblePlans = showPast ? pastPlans : currentPlans;
-  const myPlansCount = currentPlans.length;
-  return layout(`
-    <section class="page-title compact">
-
-      <h1>Inbox</h1>
-
-    </section>
-
-    <div class="inbox-tabs">
-      <button type="button" class="${activeTab === 'matches' ? 'active' : ''}" onclick="setInboxTab('matches')">
-        Conversations <span class="inbox-tab-count">${state.matches.length}</span>
-      </button>
-      <button type="button" class="${activeTab === 'my-plans' ? 'active' : ''}" onclick="setInboxTab('my-plans')">
-        Your plans <span class="inbox-tab-count">${myPlansCount}</span>
-      </button>
+  return layout(`<section class="portal-heading"><h1>Inbox</h1></section>
+    <div class="inbox-tabs" role="group" aria-label="Inbox sections">
+      <button class="${activeTab === 'matches' ? 'active' : ''}" aria-pressed="${activeTab === 'matches'}" onclick="setInboxTab('matches')">Conversations <span class="inbox-tab-count">${state.matches.length}</span></button>
+      <button class="${activeTab === 'my-plans' ? 'active' : ''}" aria-pressed="${activeTab === 'my-plans'}" onclick="setInboxTab('my-plans')">Your plans <span class="inbox-tab-count">${currentPlans.length}</span></button>
     </div>
-
     ${activeTab === 'matches' ? `
-      ${state.pendingApplications.length > 0 ? `
-        <section style="margin-top:20px;">
-          <h3 style="font-size:16px; margin-bottom:12px;">Incoming Interest on Your Plans</h3>
-          ${state.pendingApplications.map(a => `
-            <div class="conversation">
-              <div class="conversation-avatar">✦</div>
-              <div>
-                <span class="eyebrow">INTEREST RECEIVED</span>
-                <h3>${a.activity}</h3>
-                <p>A fellow student wants to join your plan.</p>
-              </div>
-              <button class="primary" onclick="acceptApplication('${a.id}')">Accept & Open Chat</button>
-            </div>
-          `).join('')}
-        </section>
-      ` : ''}
-
-      ${state.matches.length > 0 ? `
-        <section style="margin-top:20px;">
-          <h3 style="font-size:16px; margin-bottom:12px;">Active Match Chats</h3>
-          ${state.matches.map(m => `
-            <div class="conversation">
-              <div class="conversation-avatar">${uiIcon('coffee')}</div>
-              <div>
-                <span class="eyebrow">${m.status.toUpperCase()}</span>
-                <h3>${m.activity}</h3>
-                <p>${avatar(m.other?.username || 'Student', true)} ${m.other?.username || 'Student'} · ${m.location}</p>
-              </div>
-              <button onclick="openPrivateChat('${m.id}')">Open chat</button>
-            </div>
-          `).join('')}
-        </section>
-      ` : ''}
-
-      ${state.matches.length === 0 && state.pendingApplications.length === 0 ? `
-        <div class="inbox-welcome"><div class="inbox-welcome-art" aria-hidden="true"><span>${icons.inbox}</span><span>${icons.chat}</span></div><div><h2>Your next conversation<br>starts with a plan.</h2><p>When an invitation is accepted, you’ll find your private chat here.</p><button class="primary" onclick="go('discover')">Find a plan</button></div></div>
-      ` : ''}
-    ` : `
-      <section style="margin-top:20px;">
-        <div class="plan-history-tabs" role="group" aria-label="Your plan status"><button aria-pressed="${!showPast}" onclick="setInboxPlanFilter('current')">Upcoming <span>${currentPlans.length}</span></button><button aria-pressed="${showPast}" onclick="setInboxPlanFilter('past')">Past plans <span>${pastPlans.length}</span></button></div>
-        ${visiblePlans.length > 0 ? `
-          <div class="my-plans-grid">
-            ${visiblePlans.map(p => {
-              const isPast = p.scheduledAt && new Date(p.scheduledAt).getTime() < Date.now();
-              const isExpired = isPast || (p.expiresAt && new Date(p.expiresAt).getTime() < Date.now());
-              const isActive = p.status === 'open' && !isExpired;
-              let statusLabel = 'Active';
-              let statusClass = 'active';
-              if (p.status === 'matched') {
-                statusLabel = 'Matched';
-                statusClass = 'matched';
-              } else if (p.status === 'cancelled') {
-                statusLabel = 'Closed';
-                statusClass = 'closed';
-              } else if (isExpired) {
-                statusLabel = 'Expired';
-                statusClass = 'closed';
-              }
-              const dateStr = p.scheduledAt ? new Date(p.scheduledAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-              return `
-                <div class="my-plan-card">
-                  <div class="my-plan-header">
-                    <span class="status-badge ${statusClass}">${statusLabel}</span>
-                    <small>${dateStr}</small>
-                  </div>
-                  <h3>${escapeHtml(p.activity)}</h3>
-                  <p class="muted">${escapeHtml(p.location)}</p>
-                  <div class="my-plan-footer">
-                    <span>${p.pendingApplicantsCount} applicant${p.pendingApplicantsCount === 1 ? '' : 's'}</span>
-                    ${isActive ? `<button class="close-plan-btn" onclick="closeMyPlan('${p.id}')">Close plan</button>` : `<button class="close-plan-btn" onclick="repeatMyPlan('${p.id}')">Plan again</button>`}
-                  </div>
-                </div>
-              `;
-            }).join('')}
-          </div>
-        ` : `
-          <div class="empty-inbox">
-            <span>${uiIcon('coffee')}</span>
-            <h2>${showPast ? 'No past plans' : 'Your calendar is open'}</h2>
-            <p>${showPast ? 'Completed and closed plans will appear here.' : 'Post an invitation for your next free hour.'}</p>
-            <button class="primary" onclick="openComposer()">＋ Create a plan</button>
-          </div>
-        `}
-      </section>
-    `}
-  `);
+      ${state.pendingApplications.length ? `<section class="ac-inbox-section"><h2>Invitations to connect <span>${state.pendingApplications.length}</span></h2><div class="ac-conversation-list">${state.pendingApplications.map(a => `<article class="ac-conversation ac-invitation" data-category="${activityFor(a).id}"><div class="ac-conversation-symbol" aria-hidden="true">${uiIcon(activityFor(a).id)}</div><div class="ac-conversation-copy"><h3>${renderExpressions(escapeHtml(a.activity))}</h3><p>Someone would like to join you.</p></div><button class="ac-button ac-button-primary" onclick="acceptApplication('${escapeQuotes(a.id)}')">Accept invitation</button></article>`).join('')}</div></section>` : ''}
+      ${state.matches.length ? `<section class="ac-inbox-section"><h2>Your conversations</h2><div class="ac-conversation-list">${state.matches.map(m => `<article class="ac-conversation"><div class="ac-conversation-person">${avatar(m.other?.username || 'Student', false, Boolean(m.other?.isVerified))}</div><div class="ac-conversation-copy"><h3>${escapeHtml(m.other?.username || 'Student')}</h3><p>${renderExpressions(escapeHtml(m.activity || 'Campus plan'))}</p>${m.location ? `<span class="ac-conversation-place">${uiIcon('pin')}${escapeHtml(m.location)}</span>` : ''}</div><button class="ac-button" onclick="openPrivateChat('${escapeQuotes(m.id)}')">Open chat</button></article>`).join('')}</div></section>` : ''}
+      ${!state.matches.length && !state.pendingApplications.length ? planEmpty('A plan. A first hello.', 'Your private conversations start when an invitation is accepted.', `<button class="ac-button ac-button-primary" onclick="go('discover')">Find a plan</button>`, 'chat') : ''}
+    ` : `<section class="ac-plan-history"><div class="plan-history-tabs" role="group" aria-label="Your plan status"><button aria-pressed="${!showPast}" onclick="setInboxPlanFilter('current')">Upcoming <span>${currentPlans.length}</span></button><button aria-pressed="${showPast}" onclick="setInboxPlanFilter('past')">Past plans <span>${pastPlans.length}</span></button></div>
+      ${visiblePlans.length ? `<div class="ac-plan-grid">${visiblePlans.map(p => planCard(p, true)).join('')}</div>` : planEmpty(showPast ? 'No past plans yet' : 'Your calendar is open', showPast ? 'Your previous invitations will appear here.' : 'Find some company for your next free hour.')}
+    </section>`}`);
 }
 
 function safety() {
@@ -1277,7 +1206,7 @@ function adminPortal() {
             </div>
           ` : allUserGroups.length === 0 ? `
             <div class="admin-empty-state" style="padding: 50px 20px; text-align: center; background: #fff; border-radius: 14px; border: 1px dashed var(--line);">
-              <span style="font-size: 38px;">🛡️</span>
+              <span style="font-size: 38px;"></span>
               <h3 style="margin: 10px 0 6px; font: 600 20px 'Playfair Display';">No reports to review</h3>
               <p style="color: var(--muted); font-size: 13px; max-width: 420px; margin: 0 auto;">
                 ${filter === 'pending' ? 'There are no pending reports.' : 'No incident reports match this filter.'}
@@ -1350,8 +1279,8 @@ function adminPortal() {
                     <div class="filter-chip-row">
                       <button type="button" class="filter-chip ${state.adminFilterAccountStatus === 'all' ? 'active' : ''}" onclick="setAdminFilterAccountStatus('all')">All</button>
                       <button type="button" class="filter-chip ${state.adminFilterAccountStatus === 'active' ? 'active' : ''}" onclick="setAdminFilterAccountStatus('active')">● Active</button>
-                      <button type="button" class="filter-chip ${state.adminFilterAccountStatus === 'suspended' ? 'active' : ''}" onclick="setAdminFilterAccountStatus('suspended')">⏱️ Timed Out</button>
-                      <button type="button" class="filter-chip ${state.adminFilterAccountStatus === 'banned' ? 'active' : ''}" onclick="setAdminFilterAccountStatus('banned')">🚫 Banned</button>
+                      <button type="button" class="filter-chip ${state.adminFilterAccountStatus === 'suspended' ? 'active' : ''}" onclick="setAdminFilterAccountStatus('suspended')">Timed Out</button>
+                      <button type="button" class="filter-chip ${state.adminFilterAccountStatus === 'banned' ? 'active' : ''}" onclick="setAdminFilterAccountStatus('banned')">Banned</button>
                     </div>
                   </div>
 
@@ -1359,7 +1288,7 @@ function adminPortal() {
                     <span class="filter-tray-label">WARNINGS:</span>
                     <div class="filter-chip-row">
                       <button type="button" class="filter-chip ${state.adminFilterWarnings === 'all' ? 'active' : ''}" onclick="setAdminFilterWarnings('all')">All</button>
-                      <button type="button" class="filter-chip ${state.adminFilterWarnings === 'warned' ? 'active' : ''}" onclick="setAdminFilterWarnings('warned')">⚠️ Has Warnings</button>
+                      <button type="button" class="filter-chip ${state.adminFilterWarnings === 'warned' ? 'active' : ''}" onclick="setAdminFilterWarnings('warned')">Has Warnings</button>
                       <button type="button" class="filter-chip ${state.adminFilterWarnings === 'clean' ? 'active' : ''}" onclick="setAdminFilterWarnings('clean')">0 Warnings</button>
                     </div>
                   </div>
@@ -1368,7 +1297,7 @@ function adminPortal() {
                     <span class="filter-tray-label">PATTERN:</span>
                     <div class="filter-chip-row">
                       <button type="button" class="filter-chip ${state.adminFilterReporters === 'all' ? 'active' : ''}" onclick="setAdminFilterReporters('all')">All</button>
-                      <button type="button" class="filter-chip ${state.adminFilterReporters === 'repeat' ? 'active' : ''}" onclick="setAdminFilterReporters('repeat')">⚠️ Repeat (3x)</button>
+                      <button type="button" class="filter-chip ${state.adminFilterReporters === 'repeat' ? 'active' : ''}" onclick="setAdminFilterReporters('repeat')">Repeat (3x)</button>
                       <button type="button" class="filter-chip ${state.adminFilterReporters === 'distinct' ? 'active' : ''}" onclick="setAdminFilterReporters('distinct')">✓ Distinct</button>
                     </div>
                   </div>
@@ -1419,10 +1348,10 @@ function adminPortal() {
               <div>
                 <h3 style="font:600 18px 'Playfair Display';margin:0 0 4px;">Invite a team member</h3>
                 <p style="font-size:12.5px;color:var(--muted);margin:0;">
-                  Grant team access by email. You can add trusted moderators or designate permanent root co-owners.
+                  Manage who can review reports and profiles.
                 </p>
               </div>
-              <span style="font-size: 24px;">👑</span>
+              <span style="font-size: 24px;"></span>
             </div>
 
             <form onsubmit="event.preventDefault(); handleAdminAddModerator();" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;align-items:center;">
@@ -1458,7 +1387,7 @@ function adminPortal() {
                   Built-in root administrative accounts defined in application configuration.
                 </p>
               </div>
-              <span style="font-size: 20px;">👑</span>
+              <span style="font-size: 20px;"></span>
             </div>
 
             ${primaryAdmins.length === 0 ? `
@@ -1505,7 +1434,7 @@ function adminPortal() {
                   Colleagues and team members added via this portal to scale customer and incident operations.
                 </p>
               </div>
-              <span style="font-size: 20px;">🛡️</span>
+              <span style="font-size: 20px;"></span>
             </div>
 
             ${teamModerators.length === 0 ? `
@@ -1555,20 +1484,20 @@ function renderAdminVerificationsPanel() {
     <div class="admin-verifications-panel" style="display:flex;flex-direction:column;gap:16px;">
       <div class="admin-verif-header-banner" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
         <div>
-          <h3 style="font:600 19px 'Playfair Display';margin:0 0 4px;color:var(--ink);">Student Verification Queue</h3>
+          <h3 style="font:600 19px 'Playfair Display';margin:0 0 4px;color:var(--ink);">Profile verification</h3>
           <p style="font-size:12.5px;color:var(--muted);margin:0;max-width:600px;line-height:1.45;">
-            Ephemeral live selfies for identity &amp; gender verification. <b>Images are compressed in-browser (~30KB) and permanently deleted the second you take action (0 KB retained).</b>
+            Review submitted profiles before approving verification.
           </p>
         </div>
         <span class="stats-pill" style="font-size:12px;padding:5px 12px;background:#f0fdf4;color:#15803d;border-color:#bbf7d0;">
-          🛡️ ${verifs.length} Pending Review
+           ${verifs.length} Pending Review
         </span>
       </div>
 
       ${verifs.length === 0 ? `
         <div class="admin-empty-state" style="padding: 60px 20px; text-align: center; background: #fff; border-radius: 14px; border: 1px dashed var(--line);">
-          <span style="font-size: 42px;">🛡️</span>
-          <h3 style="margin: 12px 0 6px; font: 600 20px 'Playfair Display';">Verification queue is completely clear!</h3>
+          <span style="font-size: 42px;"></span>
+          <h3 style="margin: 12px 0 6px; font: 600 20px 'Playfair Display';">No profiles awaiting review</h3>
           <p style="color: var(--muted); font-size: 13px; max-width: 440px; margin: 0 auto;">
             No pending student verification selfies. All registered student identities and genders are verified.
           </p>
@@ -1599,7 +1528,7 @@ function renderAdminVerificationsPanel() {
 
                 <div style="display:flex;align-items:center;gap:8px;margin:8px 0 14px;flex-wrap:wrap;">
                   <span style="font-size:11px;font-weight:600;padding:3px 8px;border-radius:12px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;">
-                    Declared: <b>${v.gender === 'woman' ? 'Woman 👩' : (v.gender === 'man' ? 'Man 👨' : v.gender || 'Unknown')}</b>
+                    Declared: <b>${v.gender === 'woman' ? 'Woman' : (v.gender === 'man' ? 'Man' : v.gender || 'Unknown')}</b>
                   </span>
                   <span style="font-size:11px;color:var(--muted);">
                     Submitted ${v.submittedAt ? formatMemberTimeAgo(v.submittedAt) : 'recently'}
@@ -1608,10 +1537,10 @@ function renderAdminVerificationsPanel() {
 
                 <div style="margin-top:auto;display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-top:12px;border-top:1px solid var(--line);">
                   <button type="button" class="primary" onclick="approveStudentVerification('${v.id}')" style="font-size:12px;padding:9px 12px;font-weight:700;white-space:nowrap;" title="Approve & permanently delete image">
-                    ✓ Approve
+                    Approve
                   </button>
                   <button type="button" class="secondary" onclick="rejectStudentVerification('${v.id}', '${v.gender || ''}', '${escapeHtml(v.publicAlias || '')}')" style="font-size:12px;padding:9px 12px;color:#dc2626;border-color:#fecaca;" title="Reject & delete image">
-                    ✕ Reject
+                    Reject
                   </button>
                 </div>
               </div>
@@ -1671,10 +1600,10 @@ function renderAdminUserGroup(group) {
             <div class="dossier-name-row">
               <strong class="dossier-title">${escapeHtml(userAlias)}</strong>
               ${isBanned 
-                ? '<span class="punish-chip banned">● Banned</span>' 
+                ? '<span class="punish-chip banned">Banned</span>'
                 : (isTimedOut 
-                  ? `<span class="punish-chip timed-out">⏱️ Timed Out (until ${new Date(user.suspendedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})</span>` 
-                  : '<span class="punish-chip active">● Active Standing</span>')}
+                  ? `<span class="punish-chip timed-out">Timed Out (until ${new Date(user.suspendedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})</span>`
+                  : '<span class="punish-chip active">Active</span>')}
             </div>
             ${userEmail ? `<span class="dossier-email">${escapeHtml(userEmail)}</span>` : ''}
           </div>
@@ -1707,27 +1636,27 @@ function renderAdminUserGroup(group) {
       <!-- Compact 4-Tile KPI Summary Grid -->
       <div class="dossier-kpi-grid">
         <div class="dossier-kpi-tile">
-          <span class="kpi-label">TOTAL REPORTS</span>
+          <span class="kpi-label">Reports in this view</span>
           <strong class="kpi-value ${pendingInGroup > 0 ? 'text-amber' : 'text-green'}">
             ${reports.length} <small>(${pendingInGroup} pending)</small>
           </strong>
         </div>
         <div class="dossier-kpi-tile">
-          <span class="kpi-label">DISTINCT REPORTERS</span>
+          <span class="kpi-label">Distinct reporters</span>
           <strong class="kpi-value">${uniqueReporters} student${uniqueReporters === 1 ? '' : 's'}</strong>
         </div>
         <div class="dossier-kpi-tile">
-          <span class="kpi-label">REPORTER PATTERN</span>
+          <span class="kpi-label">Repeat reports</span>
           <div style="margin-top:2px;">
             ${repeatReporters.length > 0 
-              ? `<span class="repeat-reporter-badge">⚠️ ${repeatReporters.map(r => `${escapeHtml(r.alias)} (${r.count}x)`).join(', ')}</span>`
-              : `<span class="clean-reporter-badge">✓ All distinct</span>`}
+              ? `<span class="repeat-reporter-badge">${repeatReporters.map(r => `${escapeHtml(r.alias)} (${r.count}x)`).join(', ')}</span>`
+              : `<span class="clean-reporter-badge">None</span>`}
           </div>
         </div>
         <div class="dossier-kpi-tile">
-          <span class="kpi-label">WARNING RECORD</span>
+          <span class="kpi-label">Warning record</span>
           <strong class="kpi-value ${warningCount > 0 ? 'text-amber' : 'text-muted'}">
-            ${warningCount > 0 ? `⚠️ ${warningCount} Warning${warningCount === 1 ? '' : 's'}` : '0 Warnings'}
+            ${warningCount > 0 ? `${warningCount} Warning${warningCount === 1 ? '' : 's'}` : '0 Warnings'}
           </strong>
         </div>
       </div>
@@ -1735,7 +1664,7 @@ function renderAdminUserGroup(group) {
       <!-- Nested Incidents List for this Student -->
       <div class="dossier-incidents-section">
         <div class="dossier-incidents-header">
-          <span>REPORTS & CONVERSATION (${reports.length})</span>
+          <span>Reports & conversation (${reports.length})</span>
           <span>${pendingInGroup} pending review</span>
         </div>
         <div class="dossier-incidents-list">
@@ -1788,7 +1717,7 @@ function renderAdminIncidentItem(r, index, total, userId, reportedAlias) {
       </div>
 
       <div class="incident-reporter-strip">
-        <span style="font:700 10px 'DM Mono';color:var(--muted);letter-spacing:.6px;">REPORTER:</span>
+        <span style="font:700 10px 'DM Mono';color:var(--muted);letter-spacing:.6px;">Reported by</span>
         <strong style="font-size:13px;color:var(--ink);">${escapeHtml(reporterAlias)}</strong>
         ${r.reporter?.email ? `<code style="font:11px 'DM Mono';background:#e2e8f0;padding:1px 5px;border-radius:4px;color:#334155;">${escapeHtml(r.reporter.email)}</code>` : ''}
       </div>
@@ -1825,7 +1754,7 @@ function renderAdminIncidentItem(r, index, total, userId, reportedAlias) {
           ${reportedMsg ? `
             <div class="transcript-row flagged-row">
               <div class="flagged-cue-label">
-                <span class="flagged-badge">⚠️ FLAGGED / REPORTED MESSAGE</span>
+                <span class="flagged-badge">Reported message</span>
                 <span class="transcript-time">${formatMsgTime(reportedMsg.createdAt)}</span>
               </div>
               <div class="flagged-content-wrap">
@@ -1857,11 +1786,11 @@ function renderAdminIncidentItem(r, index, total, userId, reportedAlias) {
       ${isPending ? `
         <div class="admin-actions-row">
           <button type="button" class="action-btn dismiss" onclick="resolveAdminReport('${r.id}', 'dismiss')" title="Mark as reviewed without penalty">
-            ✓ Dismiss Incident (No Action)
+            Dismiss report
           </button>
           ${reportedMsg && !reportedMsg.isDeleted ? `
             <button type="button" class="action-btn delete-msg" onclick="resolveAdminReport('${r.id}', 'delete_message')" title="Delete offending message from chat">
-              🗑️ Delete Message Only
+              Delete message
             </button>
           ` : ''}
           <button type="button" class="action-btn timeout-24h" onclick="resolveAdminReport('${r.id}', 'timeout_user', 24)" title="Suspend user for 24 hours">
@@ -1871,7 +1800,7 @@ function renderAdminIncidentItem(r, index, total, userId, reportedAlias) {
             7d timeout
           </button>
           <button type="button" class="action-btn ban-user" onclick="confirmBanUser('${r.id}', '${escapeQuotes(reportedAlias)}', '${escapeQuotes(r.reportedUser?.email || '')}')" title="Permanently ban user">
-            🚫 Ban User
+            Ban user
           </button>
         </div>
       ` : `
@@ -2795,7 +2724,7 @@ function openComposer() {
   document.body.insertAdjacentHTML('beforeend', modal(`
     <div class="composer-modal-content">
 
-      <h2>Create a plan</h2>
+      <div class="ac-composer-heading"><span aria-hidden="true">${uiIcon('calendar')}</span><h2>Create a plan</h2></div>
       <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">One-to-one plans pair a verified man with a verified woman.</p>
 
       <form onsubmit="createPlan(event)">
@@ -2814,7 +2743,7 @@ function openComposer() {
         </div>
 
         <div class="composer-field-group">
-          <label for="plan-where">Campus Location (Public spot)
+          <label for="plan-where">Public meeting spot
             <input id="plan-where" placeholder="e.g. Central Library Cafe" required maxlength="120">
           </label>
           <div class="quick-chips-row">
@@ -2845,7 +2774,7 @@ function openComposer() {
         </div>
       </form>
     </div>
-  `));
+  `, 'ac-composer-dialog'));
 }
 
 window.selectQuickActivity = text => {
@@ -4524,14 +4453,14 @@ window.closeMyPlan = planId => {
   document.querySelector('.modal-backdrop')?.remove();
   document.body.insertAdjacentHTML('beforeend', modal(`
     <div class="confirm-modal-content">
-      <span class="eyebrow" style="color: #dc2626;">CLOSE PLAN</span>
-      <h2>Close "${planName}"?</h2>
+      <div class="ac-confirm-icon" aria-hidden="true">${uiIcon('calendar')}</div>
+      <h2>Close this invitation?</h2><p class="ac-confirm-name">${renderExpressions(escapeHtml(planName))}</p>
       <p style="font-size: 13.5px; color: var(--muted); line-height: 1.5; margin: 8px 0 18px;">
-        Closing this plan will immediately remove it from the Discover feed. Any pending student applications will no longer be able to match.
+        It will leave Discover and stop accepting interest. You can make this plan again later.
       </p>
       <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 10px;">
-        <button type="button" class="text-btn" onclick="closeModal()">Keep Plan</button>
-        <button type="button" class="primary" style="background: #dc2626; border-color: #dc2626;" onclick="confirmClosePlan('${planId}')">Yes, Close Plan</button>
+        <button type="button" class="text-btn" onclick="closeModal()">Keep plan</button>
+        <button type="button" class="primary" style="background: #dc2626; border-color: #dc2626;" onclick="confirmClosePlan('${planId}')">Close plan</button>
       </div>
     </div>
   `));
