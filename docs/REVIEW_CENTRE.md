@@ -86,3 +86,13 @@ RUN_HEARING_TESTS=1 node --test tests/hearings-integration.test.mjs
 ```
 
 The test covers slot authorization, overlap, simultaneous booking, reporter invitations, campus and role isolation, optional attendance, private evidence, speaking turns, the server deadline, one hearing per decision, reasoned restriction reduction, cancellation, and rebooking. Test accounts and cases are removed after the run. No production user is banned or restored by these tests.
+
+## Interactive demo on port 3003
+
+Run `npm run review` to rebuild and start the isolated review app. It includes a fictional appeal with three roles:
+
+- **SilverAspen**: restricted account holder. Open Hearings and enter the demo appointment.
+- **CalmClover**: independent moderator. Open the same appointment and choose Open hearing once SilverAspen is present.
+- **VelvetWillow**: invited reporting participant. Accept, decline, or contribute privately.
+
+Use separate browser profiles/private windows for simultaneous sessions; ordinary tabs share the selected demo account. The appointment initially covers the next 30 minutes. `npm run review:hearing-reset` resets only this fictional appeal and starts a fresh 30-minute appointment. Refresh the demo after resetting. Real accounts and Supabase are never used by this command.

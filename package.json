@@ -13,7 +13,8 @@
     "db:validate": "prisma validate --schema server/prisma/schema.prisma",
     "db:seed": "node server/prisma/seed.js",
     "test": "node --test tests/*.test.mjs",
-    "review": "node scripts/review.cjs"
+    "review": "node scripts/review.cjs",
+    "review:hearing-reset": "node scripts/review-hearing.cjs --reset"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
