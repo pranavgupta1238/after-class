@@ -4,6 +4,7 @@ import './experience.css';
 import './portal.css';
 import './theme.css';
 import './workspace.css';
+import { createAdminLoader } from './admin-loader.mjs';
 import { ACTIVITIES, activityFor, selectPlans, planTime } from './discovery.mjs';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -242,6 +243,16 @@ function setCachedUser(user) {
 }
 
 function updateMe(user) {
+  if (!user?.isAdmin || state.me?.id !== user.id) {
+    adminLoader.reset();
+    contextLoader.reset();
+    state.adminLoads = {};
+    state.adminContexts = {};
+    state.adminReports = [];
+    state.adminModerators = [];
+    state.adminPrimaryAdmins = [];
+    state.adminVerifications = [];
+  }
   if (!user || state.me?.id !== user.id) {
     chatRequestController?.abort();
     chatRequestController = null;
@@ -306,7 +317,8 @@ const state = {
   adminReports: [],
   adminModerators: [],
   adminPrimaryAdmins: [],
-  adminLoading: false,
+  adminLoads: {},
+  adminContexts: {},
   adminFilter: 'pending',
   adminSelectedUserId: null,
   adminWarningTarget: null,
@@ -1238,7 +1250,7 @@ function adminPortal() {
       </section>
 
       <div class="workspace-sections" role="navigation" aria-label="Moderation sections">
-        ${[['reports','Reports',pendingCount,'Pending review',icons.safety],['verifications','Verification',state.adminVerifications?.length||0,'Awaiting review',icons.settings],['moderators','Team',totalStaffCount,'Staff members',icons.inbox]].map(([key,label,count,caption,icon])=>`<button class="workspace-section ${tab===key?'selected':''}" aria-current="${tab===key?'page':'false'}" onclick="setAdminTab('${key}')"><span class="workspace-section-icon">${icon}</span><span><strong>${label}</strong><small>${caption}</small></span><b>${state.adminLoading?'—':count}</b></button>`).join('')}
+        ${[['reports','Reports',pendingCount,'Pending review',icons.safety],['verifications','Verification',state.adminVerifications?.length||0,'Awaiting review',icons.settings],['moderators','Team',totalStaffCount,'Staff members',icons.inbox]].map(([key,label,count,caption,icon])=>`<button class="workspace-section ${tab===key?'selected':''}" aria-current="${tab===key?'page':'false'}" onclick="setAdminTab('${key}')"><span class="workspace-section-icon">${icon}</span><span><strong>${label}</strong><small>${caption}</small></span><b>${state.adminLoads[key]?.loaded ? count : '—'}</b></button>`).join('')}
       </div>
       <div class="admin-toolbar-row">
         ${tab === 'reports' ? `
@@ -1256,11 +1268,12 @@ function adminPortal() {
         ` : ''}
       </div>
 
+      ${state.adminLoads[tab]?.loaded && (state.adminLoads[tab].loading || state.adminLoads[tab].error) ? `<p class="admin-load-status" role="status">${state.adminLoads[tab].error ? `${escapeHtml(state.adminLoads[tab].error)} Showing previously loaded data.` : 'Refreshing…'}</p>` : ''}
       ${tab === 'reports' ? `
         <div class="admin-reports-panel">
-          ${state.adminLoading ? `
+          ${!state.adminLoads.reports?.loaded ? `
             <div class="admin-empty-state" style="padding: 40px; text-align: center; background:#fff; border-radius:14px; border:1px solid var(--line);">
-              <p style="color: var(--muted); margin:0;">Loading reports…</p>
+              <p style="color: var(--muted); margin:0;">${state.adminLoads.reports?.error ? escapeHtml(state.adminLoads.reports.error) : 'Loading reports…'}</p>${state.adminLoads.reports?.error ? '<button class="secondary" onclick="loadAdminData()">Retry</button>' : ''}
             </div>
           ` : allUserGroups.length === 0 ? `
             <div class="admin-empty-state" style="padding: 50px 20px; text-align: center; background: #fff; border-radius: 14px; border: 1px dashed var(--line);">
@@ -1397,7 +1410,7 @@ function adminPortal() {
             `}
           `}
         </div>
-      ` : tab === 'verifications' ? `
+      ` : !state.adminLoads[tab]?.loaded ? `<div class="admin-empty-state" role="status"><p>${state.adminLoads[tab]?.error ? escapeHtml(state.adminLoads[tab].error) : 'Loading…'}</p>${state.adminLoads[tab]?.error ? '<button class="secondary" onclick="loadAdminData()">Retry</button>' : ''}</div>` : tab === 'verifications' ? `
         ${renderAdminVerificationsPanel()}
       ` : `
         <div class="admin-team-panel" style="display:flex;flex-direction:column;gap:16px;">
@@ -1737,9 +1750,11 @@ function renderAdminIncidentItem(r, index, total, userId, reportedAlias) {
   const isPending = ['pending', 'reviewing'].includes(r.status);
   const createdStr = new Date(r.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-  const ctx = r.context || {};
+  const contextState = state.adminContexts[r.id];
+  const ctx = contextState?.data?.context || r.context || {};
+  const contextLoaded = contextState?.loaded || r.contextLoaded;
   const beforeMsgs = ctx.context_before || [];
-  const reportedMsg = ctx.reported_message || (r.message ? {
+  const reportedMsg = contextLoaded ? (ctx.reported_message || null) : (r.message ? {
     id: r.message.id,
     content: r.message.content,
     senderName: r.reportedUser?.publicAlias || r.reportedUser?.alias || r.message.senderAlias,
@@ -1788,15 +1803,16 @@ function renderAdminIncidentItem(r, index, total, userId, reportedAlias) {
       <div class="context-transcript-container">
         <div class="transcript-toolbar">
           <span class="transcript-title">
-            📜 Chronological Context Transcript (5 Before · Flagged Message · 5 After)
+            Conversation context
           </span>
           <span class="transcript-meta">
-            ${beforeMsgs.length} before · 1 reported · ${afterMsgs.length} after
+            ${contextLoaded ? `${beforeMsgs.length} before · ${reportedMsg ? 1 : 0} reported · ${afterMsgs.length} after` : 'Reported message'}
           </span>
         </div>
 
+        ${!contextLoaded ? `<div class="admin-context-load" role="status"><button class="secondary" onclick="loadAdminContext('${r.id}')" ${contextState?.loading ? 'disabled' : ''}>${contextState?.loading ? 'Loading context…' : contextState?.error ? 'Retry context' : 'Load surrounding messages'}</button>${contextState?.error ? `<p>${escapeHtml(contextState.error)}</p>` : ''}</div>` : ''}
         <div class="transcript-messages-flow">
-          ${beforeMsgs.length === 0 ? `
+          ${!contextLoaded ? '' : beforeMsgs.length === 0 ? `
             <div class="transcript-boundary-notice">— Start of room conversation history (no earlier messages) —</div>
           ` : beforeMsgs.map(m => `
             <div class="transcript-row context-prior ${m.senderId === userId ? 'offender-row' : (m.senderId === reporterId ? 'reporter-row' : '')}">
@@ -1825,7 +1841,7 @@ function renderAdminIncidentItem(r, index, total, userId, reportedAlias) {
             </div>
           `}
 
-          ${afterMsgs.length === 0 ? `
+          ${!contextLoaded ? '' : afterMsgs.length === 0 ? `
             <div class="transcript-boundary-notice">— End of messages in room (no subsequent messages) —</div>
           ` : afterMsgs.map(m => `
             <div class="transcript-row context-subsequent ${m.senderId === userId ? 'offender-row' : (m.senderId === reporterId ? 'reporter-row' : '')}">
@@ -2043,27 +2059,39 @@ window.toggleAdminSortOrder = () => {
   render();
 };
 
-window.loadAdminData = async () => {
-  if (!state.me?.isAdmin) return;
-  state.adminLoading = true;
-  render();
-  try {
-    const [reportsData, modData, verifData] = await Promise.all([
-      api('/admin/reports'),
-      api('/admin/moderators'),
-      api('/admin/verifications').catch(() => ({ verifications: [] }))
-    ]);
-    state.adminReports = reportsData.reports || [];
-    state.adminPrimaryAdmins = modData.primaryAdmins || [];
-    state.adminModerators = modData.teamModerators || [];
-    state.adminVerifications = verifData.verifications || [];
-  } catch (err) {
-    toast(err.message || 'Could not load admin data.');
-  } finally {
-    state.adminLoading = false;
-    render();
+const adminLoader = createAdminLoader({
+  request: (key, signal) => api(`/admin/${key}`, { signal }),
+  onChange: (key, entry) => {
+    state.adminLoads[key] = { loading: entry.loading, loaded: entry.loaded, error: entry.error };
+    if (entry.loaded) {
+      if (key === 'reports') state.adminReports = entry.data.reports || [];
+      if (key === 'moderators') {
+        state.adminPrimaryAdmins = entry.data.primaryAdmins || [];
+        state.adminModerators = entry.data.teamModerators || [];
+      }
+      if (key === 'verifications') state.adminVerifications = entry.data.verifications || [];
+    }
+    if (state.view === 'admin') render();
   }
+});
+
+window.loadAdminData = (force = true) => {
+  if (!state.me?.isAdmin) return Promise.resolve();
+  if (force) {
+    contextLoader.reset();
+    state.adminContexts = {};
+  }
+  return Promise.all(['reports', 'moderators', 'verifications'].map(key => adminLoader.load(key, { force })));
 };
+
+const contextLoader = createAdminLoader({
+  request: (id, signal) => api(`/admin/reports/${encodeURIComponent(id)}/context`, { signal }),
+  onChange: (id, entry) => {
+    state.adminContexts[id] = { loading: entry.loading, loaded: entry.loaded, error: entry.error, data: entry.data };
+    if (state.view === 'admin') render();
+  }
+});
+window.loadAdminContext = id => contextLoader.load(id, { force: true });
 
 window.approveStudentVerification = async (userId) => {
   try {
@@ -3805,7 +3833,7 @@ window.go = (v, replace = false) => {
   if (v === 'discover' || v === 'home') loadDiscover();
   if (v === 'inbox') loadInbox();
   if (v === 'chat') loadLiveChat();
-  if (v === 'admin') loadAdminData();
+  if (v === 'admin') loadAdminData(false);
 };
 
 window.toast = t => {
@@ -4407,13 +4435,8 @@ async function loadMe() {
     if (state.view === 'discover' || state.view === 'home') loadDiscover();
     if (state.view === 'inbox') loadInbox();
     if (state.view === 'chat') loadLiveChat();
-    if (state.view === 'admin' && state.me?.isAdmin) loadAdminData();
-    if (state.me?.isAdmin) {
-      api('/admin/reports').then(r => {
-        state.adminReports = r.reports || [];
-        render();
-      }).catch(() => {});
-    }
+    if (state.view === 'admin' && state.me?.isAdmin) loadAdminData(false);
+
   } catch (err) {
     state.authLoading = false;
     if (err.status === 401 || err.status === 403 || err.message === 'Authentication required' || err.message === 'Account unavailable') {
@@ -5084,7 +5107,7 @@ window.addEventListener('popstate', e => {
     if (pathView === 'discover' || pathView === 'home') loadDiscover();
     if (pathView === 'inbox') loadInbox();
     if (pathView === 'chat') loadLiveChat();
-    if (pathView === 'admin') loadAdminData();
+    if (pathView === 'admin') loadAdminData(false);
   }
 });
 

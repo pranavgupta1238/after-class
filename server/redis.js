@@ -12,8 +12,12 @@ function getClient() {
   if (!client) {
     client = new Redis(process.env.REDIS_URL, {
       tls: { rejectUnauthorized: false },
-      maxRetriesPerRequest: 2,
-      retryStrategy: times => Math.min(times * 50, 2000)
+      // Permission/cache reads must not wait through repeated connection attempts.
+      // Existing local fallbacks handle failed commands; reconnect in the background.
+      connectTimeout: 1500,
+      commandTimeout: 1200,
+      maxRetriesPerRequest: 1,
+      retryStrategy: times => Math.min(500 * 2 ** Math.min(times, 6), 30000)
     });
     client.on('error', err => console.warn('[Redis Warning]', err.message));
   }

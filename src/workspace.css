@@ -42,3 +42,5 @@
 .report-coverage summary { cursor:pointer;font:500 13px 'DM Sans',sans-serif; }
 .report-coverage details p { margin-top:12px;max-width:800px; }
 @media(max-width:800px) { .report-coverage { margin:16px;padding:18px; }.report-coverage-summary { align-items:flex-start;flex-direction:column;gap:12px; }.report-coverage-outcomes { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+
+.admin-load-status { margin:0;color:var(--muted);font-size:13px; }.admin-context-load { padding:16px; }.admin-context-load p { font-size:13px;color:var(--muted); }
