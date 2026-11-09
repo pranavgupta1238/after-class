@@ -3,6 +3,7 @@ import './campus.css';
 import './experience.css';
 import './portal.css';
 import './theme.css';
+import './workspace.css';
 import { ACTIVITIES, activityFor, selectPlans, planTime } from './discovery.mjs';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -1035,9 +1036,16 @@ function inbox() {
 }
 
 function safety() {
-  return layout(`<section class="portal-heading"><div><h1>Trust & safety</h1></div><button class="secondary" onclick="openGuidelines()">Community guidelines</button></section>
-    <div class="safety-grid"><article><i>${icons.settings}</i><h3>Your public identity</h3><p>Other students see your alias. Your university email stays private.</p></article><article><i>${icons.inbox}</i><h3>Sharing is mutual</h3><p>Reveal your identity in a private conversation when you both agree.</p></article><article><i>${icons.safety}</i><h3>Report a concern</h3><p>Open a message’s actions and choose Report. Moderators review the context.</p></article></div>
-    <section class="preference-group safety-details"><h2>Good to know</h2><details><summary>Meeting in person</summary><p>Choose a public campus location, let a friend know your plans, and leave whenever you feel uncomfortable.</p></details><details><summary>What happens after a report?</summary><p>Authorized moderators review the reported message and surrounding conversation. They may remove content, issue a warning, or restrict an account.</p></details><details><summary>Community expectations</summary><p>Respect consent and privacy. Harassment, hate speech, bullying, and sharing someone’s identity without permission are not welcome.</p></details></section>`);
+  return layout(`<section class="safety-center">
+    <div class="safety-center-heading"><h1>Trust & safety</h1><button class="secondary" onclick="openGuidelines()">Community guidelines</button></div>
+    <div class="safety-center-grid"><section class="safety-feature"><div class="safety-seal" aria-hidden="true">${icons.safety}<span></span></div><h2>Your space.<br><em>Your say.</em></h2><p>You choose what to share and when to meet.</p><button onclick="go('settings')">Manage your privacy</button></section>
+    <section class="safety-controls" aria-label="Privacy and reporting">
+      <details open><summary><span class="safety-control-icon">${icons.settings}</span><span>Your identity<span class="safety-summary-detail">An alias in public. Your choice in private.</span></span><i aria-hidden="true">＋</i></summary><div class="safety-answer"><p>Your university email stays off your public profile. Sharing your identity in a private chat requires agreement from both people.</p><button class="link" onclick="go('settings')">View your profile settings</button></div></details>
+      <details><summary><span class="safety-control-icon">${icons.chat}</span><span>Something felt wrong?<span class="safety-summary-detail">Report a message for review.</span></span><i aria-hidden="true">＋</i></summary><div class="safety-answer"><p>Open the message’s actions, choose Report, and select a reason. A moderator can review the surrounding conversation and take action.</p><button class="link" onclick="go('chat')">Open campus chat</button></div></details>
+      <details><summary><span class="safety-control-icon">${icons.safety}</span><span>What verification means<span class="safety-summary-detail">A reviewed account. Not a safety guarantee.</span></span><i aria-hidden="true">＋</i></summary><div class="safety-answer"><p>Verification records that an account has passed the current review process. It does not guarantee someone’s intentions or behaviour. Keep personal details private until you feel comfortable.</p></div></details>
+    </section></div>
+    <section class="meeting-guide"><div><h2>Before you meet</h2><p>Keep the first plan simple.</p></div><ol><li><span>01</span><strong>Choose a public spot</strong><p>A café, library, or busy campus space.</p></li><li><span>02</span><strong>Let a friend know</strong><p>Share the place and time with someone you trust.</p></li><li><span>03</span><strong>Keep your options open</strong><p>You can change your mind or leave at any time.</p></li></ol></section>
+  </section>`);
 }
 
 function adminPortal() {
@@ -1217,11 +1225,7 @@ function adminPortal() {
         <div class="admin-header-left">
 
           <h1 class="admin-title">Moderation</h1>
-          <div class="admin-meta-row">
-            <span>Signed in as <b>${escapeHtml(me.email || me.username)}</b></span>
-            <span class="admin-dot-sep">·</span>
-            <span>Campus: <b>${escapeHtml(me.university || 'NIIT University')}</b></span>
-          </div>
+          <p class="workspace-subtitle">${escapeHtml(me.university || 'NIIT University')} · Review workspace</p>
         </div>
         <div class="admin-header-actions">
           <button type="button" class="admin-btn-secondary" onclick="loadAdminData()" title="Reload reports and staff list">
@@ -1230,19 +1234,10 @@ function adminPortal() {
         </div>
       </section>
 
+      <div class="workspace-sections" role="navigation" aria-label="Moderation sections">
+        ${[['reports','Reports',pendingCount,'Pending review',icons.safety],['verifications','Verification',state.adminVerifications?.length||0,'Awaiting review',icons.settings],['moderators','Team',totalStaffCount,'Staff members',icons.inbox]].map(([key,label,count,caption,icon])=>`<button class="workspace-section ${tab===key?'selected':''}" aria-current="${tab===key?'page':'false'}" onclick="setAdminTab('${key}')"><span class="workspace-section-icon">${icon}</span><span><strong>${label}</strong><small>${caption}</small></span><b>${state.adminLoading?'—':count}</b></button>`).join('')}
+      </div>
       <div class="admin-toolbar-row">
-        <div class="admin-view-tabs">
-          <button type="button" class="admin-view-tab ${tab === 'reports' ? 'active' : ''}" onclick="setAdminTab('reports')">
-            Reports ${pendingCount > 0 ? `<span class="tab-counter urgent">${pendingCount}</span>` : `<span class="tab-counter">${totalReportsCount}</span>`}
-          </button>
-          <button type="button" class="admin-view-tab ${tab === 'verifications' ? 'active' : ''}" onclick="setAdminTab('verifications')">
-            Verification ${(state.adminVerifications?.length || 0) > 0 ? `<span class="tab-counter urgent">${state.adminVerifications.length}</span>` : `<span class="tab-counter">0</span>`}
-          </button>
-          <button type="button" class="admin-view-tab ${tab === 'moderators' ? 'active' : ''}" onclick="setAdminTab('moderators')">
-            Team <span class="tab-counter">${totalStaffCount}</span>
-          </button>
-        </div>
-
         ${tab === 'reports' ? `
           <div class="admin-filter-group">
             <button type="button" class="admin-filter-pill ${filter === 'pending' ? 'active' : ''}" onclick="setAdminFilter('pending')">
@@ -1297,12 +1292,12 @@ function adminPortal() {
             <div class="admin-controls-card">
               <div class="admin-search-row">
                 <div class="admin-search-input-wrap">
-                  <span class="admin-search-icon">🔍</span>
+                  <span class="admin-search-icon" aria-hidden="true">⌕</span>
                   <input 
                     type="text" 
                     id="admin-search-box"
                     class="admin-search-input" 
-                    placeholder="Search students or reports…"
+                    placeholder="Search students or reports" aria-label="Search reports"
                     value="${escapeHtml(state.adminSearch || '')}"
                     oninput="setAdminSearch(this.value)"
                   />
@@ -1319,7 +1314,7 @@ function adminPortal() {
 
                 <div class="admin-sort-group">
                   <label class="admin-sort-label">Sort:</label>
-                  <select class="admin-sort-select" onchange="setAdminSortBy(this.value)">
+                  <select aria-label="Sort reports" class="admin-sort-select" onchange="setAdminSortBy(this.value)">
                     <option value="pending" ${sortBy === 'pending' ? 'selected' : ''}>Pending Reports</option>
                     <option value="latest" ${sortBy === 'latest' ? 'selected' : ''}>Latest Incident</option>
                     <option value="reports" ${sortBy === 'reports' ? 'selected' : ''}>Total Reports</option>
@@ -1394,15 +1389,7 @@ function adminPortal() {
                 <button type="button" class="admin-btn-secondary" onclick="resetAdminFilters()">Reset Search & Filters</button>
               </div>
             ` : `
-              <div style="margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
-                <span style="font: 600 12.5px 'DM Sans'; color: var(--ink);">
-                  Reported Students Index (${userGroups.length} student${userGroups.length === 1 ? '' : 's'} · ${userGroups.reduce((acc, g) => acc + g.reports.length, 0)} incident${userGroups.reduce((acc, g) => acc + g.reports.length, 0) === 1 ? '' : 's'})
-                  ${(state.adminSearch || activeFilterCount > 0) ? `<span style="font-size: 11px; color: #b45309; font-weight: 500; margin-left: 6px;">(filtered from ${allUserGroups.length})</span>` : ''}
-                </span>
-                <span style="font: 500 11.5px 'DM Mono'; color: var(--muted);">
-                  Click row to view dossier & transcripts
-                </span>
-              </div>
+              <div class="review-list-heading"><h2>Reported accounts</h2><span>${userGroups.length} ${userGroups.length===1?'account':'accounts'} · ${userGroups.reduce((sum,g)=>sum+g.reports.length,0)} reports${state.adminSearch||activeFilterCount?' · Filtered':''}</span></div>
               ${renderAdminUsersTable(userGroups)}
             `}
           `}
@@ -1414,7 +1401,7 @@ function adminPortal() {
           <div class="admin-team-card" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
               <div>
-                <h3 style="font:600 18px 'Playfair Display';margin:0 0 4px;">Add Administrator or Moderator</h3>
+                <h3 style="font:600 18px 'Playfair Display';margin:0 0 4px;">Invite a team member</h3>
                 <p style="font-size:12.5px;color:var(--muted);margin:0;">
                   Grant team access by email. You can add trusted moderators or designate permanent root co-owners.
                 </p>
@@ -1434,8 +1421,8 @@ function adminPortal() {
                 id="admin-mod-role-select" 
                 style="flex: 1; min-width: 200px; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font: 600 12.5px 'DM Sans'; background: #fff; color: var(--ink); cursor: pointer;"
               >
-                <option value="moderator">🛡️ Team Moderator</option>
-                <option value="super_admin">👑 Permanent Root Owner</option>
+                <option value="moderator">Moderator</option>
+                <option value="super_admin">Permanent owner</option>
               </select>
               <button type="submit" class="admin-btn-primary" style="white-space:nowrap;padding:10px 18px;font-weight:600;">
                 + Grant Access
@@ -1621,96 +1608,14 @@ function renderAdminVerificationsPanel() {
 }
 
 function renderAdminUsersTable(userGroups) {
-  return `
-    <div class="admin-table-container">
-      <div class="admin-table-responsive">
-        <table class="admin-users-table">
-          <thead>
-            <tr>
-              <th style="width: 32%;">Reported Student</th>
-              <th style="width: 27%;">Incidents & Patterns</th>
-              <th style="width: 23%;">Warnings & Activity</th>
-              <th style="width: 18%; text-align: right;">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${userGroups.map(g => renderAdminUserTableRow(g)).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  `;
-}
-
-function renderAdminUserTableRow(g) {
-  const userAlias = g.user?.publicAlias || g.user?.alias || 'Student';
-  const userEmail = g.user?.email || '';
-  const isBanned = g.user?.accountStatus === 'banned' || g.user?.isBanned;
-  const isTimedOut = g.user?.suspendedUntil && new Date(g.user.suspendedUntil) > new Date();
-
-  const statusBadge = isBanned 
-    ? '<span class="punish-chip banned" style="display:inline-block;padding:2px 6px;font-size:10.5px;">● Banned</span>' 
-    : (isTimedOut 
-      ? '<span class="punish-chip timed-out" style="display:inline-block;padding:2px 6px;font-size:10.5px;">⏱️ Timed Out</span>' 
-      : '<span class="punish-chip active" style="display:inline-block;padding:2px 6px;font-size:10.5px;">● Active</span>');
-
-  const repeatHtml = g.repeatReporters.length > 0
-    ? `<span class="repeat-reporter-badge" title="Same student reported this user multiple times">⚠️ ${g.repeatReporters.map(r => `${escapeHtml(r.alias)} (${r.count}x)`).join(', ')}</span>`
-    : `<span class="clean-reporter-badge">✓ All distinct</span>`;
-
-  const warningHtml = g.warningCount > 0
-    ? `<span class="warning-badge-pill">⚠️ ${g.warningCount} Warning${g.warningCount === 1 ? '' : 's'}</span>`
-    : `<span class="warning-badge-pill none">0 Warnings</span>`;
-
-  const latestStr = g.latestDate 
-    ? new Date(g.latestDate).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-    : '—';
-
-  return `
-    <tr class="admin-table-row" onclick="selectAdminUser('${g.userId}')" title="Click to open detailed incident dossier & transcripts">
-      <td>
-        <div class="admin-user-cell">
-          ${avatar(g.user?.avatarConfig || userAlias, false)}
-          <div class="admin-user-info">
-            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-              <strong class="admin-user-alias">${escapeHtml(userAlias)}</strong>
-              ${statusBadge}
-            </div>
-            ${userEmail ? `<span class="admin-user-email">${escapeHtml(userEmail)}</span>` : ''}
-          </div>
-        </div>
-      </td>
-      <td>
-        <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;">
-          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-            <span class="incident-count-pill ${g.pendingCount === 0 ? 'resolved' : ''}">
-              ${g.reports.length} report${g.reports.length === 1 ? '' : 's'}${g.pendingCount > 0 ? ` (${g.pendingCount} pending)` : ''}
-            </span>
-            <span style="font-size:11.5px;color:var(--muted);">${g.uniqueReporters} student${g.uniqueReporters === 1 ? '' : 's'}</span>
-          </div>
-          <div>${repeatHtml}</div>
-        </div>
-      </td>
-      <td>
-        <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;">
-          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-            ${warningHtml}
-            <button type="button" class="btn-table-warn-icon" onclick="event.stopPropagation(); openAdminWarningModal('${g.userId}', '${escapeQuotes(userAlias)}')" title="Issue formal warning">
-              + Warn
-            </button>
-          </div>
-          <span style="font-size:11px;color:var(--muted);">Last: ${latestStr}</span>
-        </div>
-      </td>
-      <td style="text-align:right;">
-        <div class="table-actions-cell" onclick="event.stopPropagation()">
-          <button type="button" class="btn-table-action primary" onclick="selectAdminUser('${g.userId}')" title="View transcripts and incidents">
-            Review Dossier →
-          </button>
-        </div>
-      </td>
-    </tr>
-  `;
+  return `<div class="review-account-list">${userGroups.map(g=>{
+    const alias=g.user?.publicAlias || g.user?.alias || 'Student';
+    const banned=g.user?.accountStatus==='banned'||g.user?.isBanned;
+    const suspended=g.user?.suspendedUntil && new Date(g.user.suspendedUntil)>new Date();
+    const status=banned?'Banned':suspended?'Timed out':'Active';
+    const latest=g.latestDate?new Date(g.latestDate).toLocaleDateString([], {day:'numeric',month:'short'}):'—';
+    return `<article class="review-account"><div class="review-account-person">${avatar(g.user?.avatarConfig || alias,false)}<div><h3>${escapeHtml(alias)}</h3><span class="review-account-status ${banned||suspended?'restricted':''}">${status}</span></div></div><dl class="review-account-facts"><div><dt>Reports</dt><dd>${g.reports.length}<small>${g.pendingCount} pending</small></dd></div><div><dt>Reported by</dt><dd>${g.uniqueReporters} <small>${g.uniqueReporters===1?'person':'people'}</small></dd></div><div><dt>Warnings</dt><dd>${g.warningCount}</dd></div><div><dt>Latest report</dt><dd>${latest}</dd></div></dl><button class="review-open" onclick="selectAdminUser('${escapeQuotes(g.userId)}')" aria-label="Review reports for ${escapeHtml(alias)}">Review reports</button></article>`;
+  }).join('')}</div>`;
 }
 
 function renderAdminUserGroup(group) {
@@ -1742,21 +1647,21 @@ function renderAdminUserGroup(group) {
 
         <div class="dossier-header-actions">
           <button type="button" class="btn-dossier-action warn" onclick="openAdminWarningModal('${userId}', '${escapeQuotes(userAlias)}')">
-            ⚠️ Issue Warning
+            Issue warning
           </button>
           <button type="button" class="btn-dossier-action timeout" onclick="handleUserModeration('${userId}', 'timeout', 24, '${escapeQuotes(userAlias)}')">
-            ⏱️ 24h Timeout
+            24h timeout
           </button>
           <button type="button" class="btn-dossier-action timeout" onclick="handleUserModeration('${userId}', 'timeout', 168, '${escapeQuotes(userAlias)}')">
-            ⏱️ 7d Timeout
+            7d timeout
           </button>
           ${isBanned ? `
             <button type="button" class="btn-dossier-action unban" onclick="handleUserModeration('${userId}', 'unban', 0, '${escapeQuotes(userAlias)}')">
-              ✓ Unban Student
+              Restore account
             </button>
           ` : `
             <button type="button" class="btn-dossier-action ban" onclick="handleUserModeration('${userId}', 'ban', 0, '${escapeQuotes(userAlias)}', '${escapeQuotes(userEmail)}')">
-              🚫 Ban Student
+              Ban account
             </button>
           `}
         </div>
@@ -1793,7 +1698,7 @@ function renderAdminUserGroup(group) {
       <!-- Nested Incidents List for this Student -->
       <div class="dossier-incidents-section">
         <div class="dossier-incidents-header">
-          <span>REPORTED INCIDENTS & CONTEXT TRANSCRIPTS (${reports.length})</span>
+          <span>REPORTS & CONVERSATION (${reports.length})</span>
           <span>${pendingInGroup} pending review</span>
         </div>
         <div class="dossier-incidents-list">
@@ -1920,10 +1825,10 @@ function renderAdminIncidentItem(r, index, total, userId, reportedAlias) {
             </button>
           ` : ''}
           <button type="button" class="action-btn timeout-24h" onclick="resolveAdminReport('${r.id}', 'timeout_user', 24)" title="Suspend user for 24 hours">
-            ⏱️ 24h Timeout
+            24h timeout
           </button>
           <button type="button" class="action-btn timeout-7d" onclick="resolveAdminReport('${r.id}', 'timeout_user', 168)" title="Suspend user for 7 days">
-            ⏱️ 7d Timeout
+            7d timeout
           </button>
           <button type="button" class="action-btn ban-user" onclick="confirmBanUser('${r.id}', '${escapeQuotes(reportedAlias)}', '${escapeQuotes(r.reportedUser?.email || '')}')" title="Permanently ban user">
             🚫 Ban User
