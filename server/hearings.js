@@ -120,8 +120,9 @@ function registerHearings({app,prisma,sessionAuth,isAdminUser,limit}) {
   const caseEntries=role==='judge'?await prisma.reviewEntry.findMany({where:{reviewId:h.reviewId},orderBy:{createdAt:'asc'}}):[];
   const decision=await prisma.reviewEntry.findFirst({where:{reviewId:h.reviewId,kind:'decision'},orderBy:{createdAt:'desc'},select:{body:true,createdAt:true}});
   res.json({...summary(h,req.user),caseEvidence:role==='judge'?{reports:h.review.action.evidence?.reports||[],entries:caseEntries.map(x=>({kind:x.kind,body:x.body,attachments:x.attachments}))}:null,serverNow:new Date(),deadline:h.deadline,startedAt:h.startedAt,endReason:h.endReason,floor:h.floor,
-   mine:member?{id:member.id,label:member.label,response:member.response}:null,
-   participants:canRead?h.participants.filter(m=>role==='judge'||m.role==='appellant'||m.response==='accepted').map(m=>({id:m.id,label:m.label,role:m.role,response:m.response,online:Boolean(m.lastSeenAt&&Date.now()-m.lastSeenAt.getTime()<45000)})):[],
+   mine:member?{id:member.id,label:member.label,response:member.response,speakRequestedAt:member.speakRequestedAt,speakRequestKind:member.speakRequestKind}:null,
+   judgeOnline:Boolean(h.judgeLastSeenAt&&Date.now()-h.judgeLastSeenAt.getTime()<45000),
+   participants:canRead?h.participants.filter(m=>role==='judge'||m.role==='appellant'||m.response==='accepted').map(m=>({id:m.id,label:m.label,role:m.role,response:m.response,speakRequestedAt:h.status==='live'?m.speakRequestedAt:null,speakRequestKind:h.status==='live'?m.speakRequestKind:null,online:Boolean(m.lastSeenAt&&Date.now()-m.lastSeenAt.getTime()<45000)})):[],
    messages:messages.map(m=>({id:m.id,label:m.label,body:m.body,visibility:m.visibility,attachments:m.attachments,createdAt:m.createdAt,mine:m.authorId===req.user.id})),decision:h.review.status==='resolved'?{...decision,outcome:h.review.outcome}:null});
  });
  endpoint('post','/api/hearings/:id/rsvp',async(req,res)=>{
@@ -129,13 +130,28 @@ function registerHearings({app,prisma,sessionAuth,isAdminUser,limit}) {
   await locked(req.params.id,req.user,async(tx,{h,role,member})=>{
    if(role!=='reporter')p.fail('This invitation is for a reporting participant.',403);
    if(!['scheduled','live'].includes(h.status))p.fail('This appointment has ended.',409);
-   await tx.hearingParticipant.update({where:{id:member.id},data:{response,lastSeenAt:null}});
+   await tx.hearingParticipant.update({where:{id:member.id},data:{response,lastSeenAt:response==='accepted'?new Date():null,speakRequestedAt:null,speakRequestKind:null}});
+   if(response!=='accepted'&&h.floor===member.id)await tx.hearing.update({where:{id:h.id},data:{floor:'paused'}});
   });signal(req.params.id);res.json({ok:true});
  });
  endpoint('post','/api/hearings/:id/presence',async(req,res)=>{
-  const {h,member}=await load(req.params.id,req.user);
+  const {h,member,role}=await load(req.params.id,req.user);
+  if(role==='judge'&&['scheduled','live'].includes(h.status))await prisma.hearing.update({where:{id:h.id},data:{judgeLastSeenAt:new Date()}});
   if(member&&member.response==='accepted'&&['scheduled','live'].includes(h.status))await prisma.hearingParticipant.update({where:{id:member.id},data:{lastSeenAt:new Date(),...(!member.joinedAt?{joinedAt:new Date()}: {})}});
   res.json({ok:true});
+ });
+ endpoint('post','/api/hearings/:id/speak-request',async(req,res)=>{
+  const kind=req.body.kind;if(!['objection','speak','withdraw'].includes(kind))p.fail('Choose objection or request to speak.');
+  const {h}=await load(req.params.id,req.user);await expire(h);
+  await locked(req.params.id,req.user,async(tx,{h,member})=>{
+   if(h.status!=='live'||h.deadline<=new Date())p.fail('Speaking requests are available during the hearing.',409);
+   if(!member||member.response!=='accepted')p.fail('Only participating students can request the floor.',403);
+   if(kind==='withdraw'){await tx.hearingParticipant.update({where:{id:member.id},data:{speakRequestedAt:null,speakRequestKind:null}});return;}
+   if(h.floor===member.id||(member.role==='appellant'&&h.floor==='appellant'))p.fail('You already have the floor.',409);
+   if(member.speakRequestedAt)p.fail('Your request is already waiting for the moderator.',409);
+   if(member.speakRequestedLastAt&&Date.now()-member.speakRequestedLastAt.getTime()<15000)p.fail('Please wait a moment before requesting again.',429);
+   const now=new Date();await tx.hearingParticipant.update({where:{id:member.id},data:{speakRequestedAt:now,speakRequestedLastAt:now,speakRequestKind:kind,lastSeenAt:now}});
+  });signal(req.params.id);res.status(201).json({ok:true});
  });
  endpoint('post','/api/hearings/:id/control',async(req,res)=>{
   const {h}=await load(req.params.id,req.user);await expire(h);
@@ -149,6 +165,7 @@ function registerHearings({app,prisma,sessionAuth,isAdminUser,limit}) {
     await tx.hearingMessage.create({data:{hearingId:h.id,label:'Afterclass',body:'Appointment cancelled: '+reason}});return;
    }
    if(role!=='judge')p.fail('Only the assigned moderator can control the hearing.',403);
+   await tx.hearing.update({where:{id:h.id},data:{judgeLastSeenAt:now}});
    if(action==='start'){
     if(h.status!=='scheduled'||now<h.slot.startsAt||now>=h.slot.endsAt)p.fail('Start during the scheduled appointment window.',409);
     const appellant=h.participants.find(m=>m.role==='appellant');
@@ -156,11 +173,19 @@ function registerHearings({app,prisma,sessionAuth,isAdminUser,limit}) {
     if(await tx.hearing.findFirst({where:{judgeId:req.user.id,status:'live',deadline:{gt:now},id:{not:h.id}}}))p.fail('Finish your current hearing first.',409);
     await tx.hearing.update({where:{id:h.id},data:{status:'live',startedAt:now,deadline:h.slot.endsAt,floor:'appellant'}});
     await tx.hearingMessage.create({data:{hearingId:h.id,label:'Afterclass',body:'The hearing is open. The moderator controls speaking turns. Private evidence goes only to the moderator.'}});
+   }else if(action==='allow-request'||action==='dismiss-request'){
+    if(h.status!=='live'||h.deadline<=now)p.fail('The hearing is not live.',409);
+    const participant=h.participants.find(m=>m.id===req.body.participantId&&m.response==='accepted'&&m.speakRequestedAt);
+    if(!participant)p.fail('This speaking request is no longer pending.',409);
+    await tx.hearingParticipant.update({where:{id:participant.id},data:{speakRequestedAt:null,speakRequestKind:null}});
+    if(action==='allow-request')await tx.hearing.update({where:{id:h.id},data:{floor:participant.role==='appellant'?'appellant':participant.id}});
+    await tx.hearingMessage.create({data:{hearingId:h.id,label:'Afterclass',body:action==='allow-request'?'The moderator allowed '+participant.label+' to speak.':'The moderator deferred the speaking request from '+participant.label+'.'}});
    }else if(action==='floor'){
     if(h.status!=='live'||h.deadline<=now)p.fail('The hearing is not live.',409);
     const allowed=['paused','appellant',...h.participants.filter(m=>m.role==='reporter'&&m.response==='accepted').map(m=>m.id)];
     if(!allowed.includes(req.body.floor))p.fail('Select a confirmed participant or pause speaking.');
     await tx.hearing.update({where:{id:h.id},data:{floor:req.body.floor}});
+    const selected=h.participants.find(m=>m.id===req.body.floor||(req.body.floor==='appellant'&&m.role==='appellant'));if(selected)await tx.hearingParticipant.update({where:{id:selected.id},data:{speakRequestedAt:null,speakRequestKind:null}});
    }else if(action==='end'){
     if(h.status!=='live')p.fail('The hearing is not live.',409);
     await tx.hearing.update({where:{id:h.id},data:{status:'ended',endedAt:now,endReason:'chair_closed'}});

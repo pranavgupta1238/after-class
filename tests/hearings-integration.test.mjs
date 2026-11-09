@@ -55,16 +55,37 @@ test('private scheduled hearings: booking, consent, live moderation and outcome'
    assert.equal((await call(owner,'/hearings/'+hearing+'/messages',{body:'Here is my explanation.',visibility:'shared'})).status,201);
    assert.equal((await call(reporter,'/hearings/'+hearing+'/messages',{body:'Not my turn.',visibility:'shared'})).status,403);
    await call(reporter,'/hearings/'+hearing+'/rsvp',{response:'accepted'});const invited=await call(reporter,'/hearings/'+hearing);
-   await call(judge,'/hearings/'+hearing+'/control',{action:'floor',floor:invited.mine.id});
+   assert.equal((await call(judge,'/hearings/'+hearing+'/presence',{})).status,200);
+   assert.equal((await call(owner,'/hearings/'+hearing)).judgeOnline,true);
+   assert.equal((await call(owner,'/hearings/'+hearing+'/speak-request',{kind:'objection'})).status,409);
+   assert.equal((await call(judge,'/hearings/'+hearing+'/speak-request',{kind:'objection'})).status,403);
+   assert.equal((await call(reporter,'/hearings/'+hearing+'/speak-request',{kind:'objection'})).status,201);
+   assert.equal((await call(reporter,'/hearings/'+hearing+'/speak-request',{kind:'objection'})).status,409);
+   assert.equal((await call(reporter,'/hearings/'+hearing+'/messages',{body:'Still waiting.',visibility:'shared'})).status,403);
+   assert.equal((await call(owner,'/hearings/'+hearing+'/control',{action:'allow-request',participantId:invited.mine.id})).status,403);
+   assert.equal((await call(stranger,'/hearings/'+hearing+'/speak-request',{kind:'speak'})).status,404);
+   const approvals=await Promise.all([1,2].map(()=>call(judge,'/hearings/'+hearing+'/control',{action:'allow-request',participantId:invited.mine.id})));
+   assert.deepEqual(approvals.map(r=>r.status).sort(),[200,409]);
+   const mine=(await call(owner,'/hearings/'+hearing)).mine;
+   assert.equal((await call(owner,'/hearings/'+hearing+'/speak-request',{kind:'speak'})).status,201);
+   assert.equal((await call(judge,'/hearings/'+hearing+'/control',{action:'dismiss-request',participantId:mine.id})).status,200);
+   assert.equal((await call(owner,'/hearings/'+hearing)).floor,invited.mine.id);
+   assert.equal((await call(owner,'/hearings/'+hearing+'/speak-request',{kind:'objection'})).status,429);
+   await db.hearingParticipant.update({where:{id:mine.id},data:{speakRequestedLastAt:new Date(Date.now()-16000)}});
+   assert.equal((await call(owner,'/hearings/'+hearing+'/speak-request',{kind:'objection'})).status,201);
+   assert.equal((await call(owner,'/hearings/'+hearing+'/speak-request',{kind:'withdraw'})).status,201);
+   assert.equal((await call(owner,'/hearings/'+hearing)).mine.speakRequestedAt,null);
    assert.equal((await call(owner,'/hearings/'+hearing+'/messages',{body:'Not my turn.',visibility:'shared'})).status,403);
    assert.equal((await call(reporter,'/hearings/'+hearing+'/messages',{body:'Here is my response to the moderator.',visibility:'shared'})).status,201);
    await call(reporter,'/hearings/'+hearing+'/rsvp',{response:'declined'});
+   assert.equal((await call(reporter,'/hearings/'+hearing+'/speak-request',{kind:'speak'})).status,403);
    assert.equal((await call(reporter,'/hearings/'+hearing)).messages.some(m=>m.body==='Here is my explanation.'),false);
   });
   await t.test('deadline closes chat on the server; no second hearing after it starts',async()=>{
    await db.hearing.update({where:{id:hearing},data:{deadline:new Date(Date.now()-1000)}});
    assert.equal((await call(judge,'/hearings/'+hearing+'/messages',{body:'Too late',visibility:'shared'})).status,409);
    assert.equal((await call(owner,'/hearings/'+hearing)).status,'ended');
+   assert.equal((await call(owner,'/hearings/'+hearing+'/speak-request',{kind:'objection'})).status,409);
    const next=(await call(owner,'/hearings/slots?review='+review.id)).slots[0];if(next)assert.equal((await call(owner,'/hearings/book',{reviewId:review.id,slotId:next.id})).status,409);
   });
   await t.test('reasoned six-month outcome is applied and visible to participants',async()=>{

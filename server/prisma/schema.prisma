@@ -458,6 +458,7 @@ model Hearing {
   judgeId String @map("judge_id") @db.Uuid
   status String @default("scheduled") @db.VarChar(20)
   floor String @default("appellant") @db.VarChar(40)
+  judgeLastSeenAt DateTime? @map("judge_last_seen_at") @db.Timestamptz(6)
   startedAt DateTime? @map("started_at") @db.Timestamptz(6)
   deadline DateTime? @db.Timestamptz(6)
   endedAt DateTime? @map("ended_at") @db.Timestamptz(6)
@@ -478,6 +479,9 @@ model HearingParticipant {
   role String @db.VarChar(20)
   label String @db.VarChar(40)
   response String @default("invited") @db.VarChar(20)
+  speakRequestedAt DateTime? @map("speak_requested_at") @db.Timestamptz(6)
+  speakRequestKind String? @map("speak_request_kind") @db.VarChar(20)
+  speakRequestedLastAt DateTime? @map("speak_requested_last_at") @db.Timestamptz(6)
   joinedAt DateTime? @map("joined_at") @db.Timestamptz(6)
   lastSeenAt DateTime? @map("last_seen_at") @db.Timestamptz(6)
   hearing Hearing @relation(fields:[hearingId],references:[id],onDelete:Cascade,onUpdate:NoAction)
