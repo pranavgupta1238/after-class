@@ -71,3 +71,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 .auth-page-wrapper .auth-form-eyebrow-tag { color:#c2c7d2;font-size:12px;letter-spacing:0; }
 .experience-sidebar .sidebar-bottom small,.campus-empty p { color:#606571;font-size:13px; }
 .campus-empty-icon { color:#606571; }
+
+/* Keep member search text clear of its inset icon, including modal input rules. */
+.campus-members-dialog #campus-member-search { padding:12px 14px 12px 42px; }
+.campus-members-dialog .member-search-wrap svg { left:14px; width:16px; height:16px; }

@@ -2985,7 +2985,6 @@ function renderCampusMembersList(members) {
       <div class="campus-member-row ${m.isOnline ? 'is-online' : ''} ${isMe ? 'is-me' : ''}">
         <div class="member-avatar-wrapper">
           ${avatar(displayName, false, true)}
-          ${m.isOnline ? '<span class="member-online-indicator" title="Online now"></span>' : ''}
         </div>
         <div class="member-info-col">
           <div class="member-name-row">
@@ -3033,7 +3032,8 @@ async function openCampusMembersModal() {
           <input 
             type="search" 
             id="campus-member-search" 
-            placeholder="Search joined members by alias..." 
+            placeholder="Search members"
+            aria-label="Search campus members"
             oninput="filterCampusMembers(this.value)"
             autocomplete="off"
           />

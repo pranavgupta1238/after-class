@@ -2446,17 +2446,7 @@ nav button:active,
   flex-shrink: 0;
 }
 
-.member-online-indicator {
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 10px;
-  height: 10px;
-  background: #22c55e;
-  border: 2px solid #fff;
-  border-radius: 50%;
-  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.4);
-}
+
 
 .member-info-col {
   flex: 1;
