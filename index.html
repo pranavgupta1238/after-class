@@ -11,107 +11,30 @@
   <link rel="shortcut icon" href="/favicon.ico?v=5">
   <title>afterclass</title>
   <style>
-    :root { --line: #e5e9e5; --paper: #fbfcf8; }
-    body { margin: 0; background: var(--paper); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    @keyframes ytShimmer { 0% { background-position: -800px 0; } 100% { background-position: 800px 0; } }
-    .sk-box { background: linear-gradient(90deg, #edf0eb 0%, #f7f9f5 40%, #edf0eb 80%); background-size: 800px 100%; animation: ytShimmer 1.5s ease-in-out infinite; border-radius: 8px; filter: blur(0.3px); will-change: background-position; }
-    .sk-circle { border-radius: 50% !important; }
-    .sk-pill { border-radius: 22px !important; }
+    body { margin: 0; background: #fbfcf8; }
+    .startup-screen { box-sizing: border-box; min-height: 100vh; min-height: 100svh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 24px; text-align: center; background: #fbfcf8; color: #244d42; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .startup-mark { display: grid; place-items: center; width: 72px; height: 72px; margin-bottom: 24px; border-radius: 24px; background: #edf1e6; font: 48px/1 Georgia, serif; color: #244d42; }
+    .startup-wordmark { font-size: 30px; font-weight: 700; letter-spacing: -1.4px; }
+    .startup-tagline { margin: 10px 0 30px; color: #69766a; font-size: 13px; line-height: 1.6; }
+    .startup-status { display: flex; align-items: center; gap: 10px; color: #6c796c; font-size: 12px; }
+    .startup-dots { display: flex; gap: 4px; }
+    .startup-dots i { width: 4px; height: 4px; border-radius: 50%; background: #527151; animation: startup-breathe 1.6s ease-in-out infinite; }
+    .startup-dots i:nth-child(2) { animation-delay: .2s; }
+    .startup-dots i:nth-child(3) { animation-delay: .4s; }
+    @keyframes startup-breathe { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { .startup-dots i { animation: none; opacity: .6; } }
   </style>
 </head>
 <body>
   <div id="app">
-    <div class="shell chat-shell" style="opacity: 0.96; pointer-events: none; user-select: none;">
-      <aside>
-        <div style="display: flex; align-items: center; gap: 8px; padding: 0 12px; margin-bottom: 24px;">
-          <div class="sk-box" style="width: 28px; height: 28px; border-radius: 7px;"></div>
-          <div class="sk-box" style="width: 110px; height: 22px; border-radius: 6px;"></div>
-        </div>
-        <div style="margin: 25px 12px 14px;">
-          <div class="sk-box" style="width: 75px; height: 10px; margin-bottom: 6px;"></div>
-          <div class="sk-box" style="width: 120px; height: 13px;"></div>
-        </div>
-        <nav style="display: grid; gap: 8px; margin-top: 12px;">
-          <div class="sk-box sk-pill" style="height: 42px; width: 100%;"></div>
-          <div class="sk-box sk-pill" style="height: 42px; width: 100%;"></div>
-          <div class="sk-box sk-pill" style="height: 42px; width: 100%;"></div>
-          <div class="sk-box sk-pill" style="height: 42px; width: 100%;"></div>
-          <div class="sk-box sk-pill" style="height: 42px; width: 100%;"></div>
-          <div class="sk-box sk-pill" style="height: 42px; width: 100%;"></div>
-        </nav>
-        <div class="sidebar-bottom" style="margin-top: auto; padding: 18px 8px 0; display: flex; align-items: center; gap: 10px;">
-          <div class="sk-box sk-circle" style="width: 36px; height: 36px;"></div>
-          <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
-            <div class="sk-box" style="width: 80px; height: 13px;"></div>
-            <div class="sk-box" style="width: 105px; height: 10px;"></div>
-          </div>
-        </div>
-      </aside>
-
-      <main class="chat-main">
-        <div class="chat-layout" style="width: 100%; max-width: 1100px; margin: 0 auto; flex: 1; display: flex; flex-direction: column;">
-          <div class="chat-panel" style="flex: 1; display: flex; flex-direction: column; background: #fff; border: 1px solid var(--line); border-radius: 14px; overflow: hidden;">
-            
-            <div style="padding: 18px 24px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <div class="sk-box" style="width: 85px; height: 10px; margin-bottom: 8px;"></div>
-                <div class="sk-box" style="width: 220px; height: 22px; margin-bottom: 6px;"></div>
-                <div class="sk-box" style="width: 140px; height: 11px;"></div>
-              </div>
-              <div style="display: flex; gap: 8px;">
-                <div class="sk-box sk-pill" style="width: 85px; height: 32px;"></div>
-                <div class="sk-box sk-pill" style="width: 34px; height: 32px;"></div>
-              </div>
-            </div>
-
-            <div style="margin: 12px 24px;">
-              <div class="sk-box" style="width: 100%; height: 36px; border-radius: 6px;"></div>
-            </div>
-
-            <div style="flex: 1; padding: 16px 24px; display: flex; flex-direction: column; gap: 18px; overflow: hidden;">
-              <div style="display: flex; gap: 12px; align-items: flex-start;">
-                <div class="sk-box sk-circle" style="width: 36px; height: 36px; flex-shrink: 0;"></div>
-                <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
-                  <div class="sk-box" style="width: 110px; height: 11px;"></div>
-                  <div class="sk-box" style="width: 48%; height: 36px; border-radius: 12px;"></div>
-                </div>
-              </div>
-
-              <div style="display: flex; gap: 12px; align-items: flex-start;">
-                <div class="sk-box sk-circle" style="width: 36px; height: 36px; flex-shrink: 0;"></div>
-                <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
-                  <div class="sk-box" style="width: 130px; height: 11px;"></div>
-                  <div class="sk-box" style="width: 68%; height: 48px; border-radius: 12px;"></div>
-                </div>
-              </div>
-
-              <div style="display: flex; gap: 12px; align-items: flex-start;">
-                <div class="sk-box sk-circle" style="width: 36px; height: 36px; flex-shrink: 0;"></div>
-                <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
-                  <div class="sk-box" style="width: 95px; height: 11px;"></div>
-                  <div class="sk-box" style="width: 32%; height: 32px; border-radius: 12px;"></div>
-                </div>
-              </div>
-
-              <div style="display: flex; gap: 12px; align-items: flex-start;">
-                <div class="sk-box sk-circle" style="width: 36px; height: 36px; flex-shrink: 0;"></div>
-                <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
-                  <div class="sk-box" style="width: 140px; height: 11px;"></div>
-                  <div class="sk-box" style="width: 58%; height: 42px; border-radius: 12px;"></div>
-                </div>
-              </div>
-            </div>
-
-            <div style="padding: 14px 20px; border-top: 1px solid var(--line); display: flex; gap: 10px;">
-              <div class="sk-box sk-pill" style="flex: 1; height: 44px;"></div>
-              <div class="sk-box sk-circle" style="width: 44px; height: 44px; flex-shrink: 0;"></div>
-            </div>
-
-          </div>
-        </div>
-      </main>
+    <div class="startup-screen" role="status" aria-live="polite" aria-label="Loading Afterclass">
+      <div class="startup-mark" aria-hidden="true">✦</div>
+      <div class="startup-wordmark">afterclass</div>
+      <p class="startup-tagline">For the life between lectures.</p>
+      <div class="startup-status"><span class="startup-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>Opening your campus…</span></div>
     </div>
   </div>
+  <noscript><p style="text-align:center">Enable JavaScript to open Afterclass.</p></noscript>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

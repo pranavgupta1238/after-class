@@ -12,6 +12,9 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
 }
 
+// Reuse the initial HTML so loading stays identical before and after JavaScript.
+const startupMarkup = document.querySelector('#app').innerHTML;
+
 const API = import.meta.env.VITE_API_URL || (location.port === '5173' ? 'http://localhost:3002/api' : '/api');
 
 function canNotify() {
@@ -5642,106 +5645,12 @@ function getViewFromPath(pathname) {
   return null;
 }
 
-function renderSkeleton() {
-  return `
-    <div class="shell chat-shell" style="opacity: 0.96; pointer-events: none; user-select: none;">
-      <aside>
-        <div style="display: flex; align-items: center; gap: 8px; padding: 0 12px; margin-bottom: 24px;">
-          <div class="sk-box" style="width: 28px; height: 28px; border-radius: 7px;"></div>
-          <div class="sk-box" style="width: 110px; height: 22px; border-radius: 6px;"></div>
-        </div>
-        <div style="margin: 25px 12px 14px;">
-          <div class="sk-box" style="width: 75px; height: 10px; margin-bottom: 6px;"></div>
-          <div class="sk-box" style="width: 120px; height: 13px;"></div>
-        </div>
-        <nav style="display: grid; gap: 8px; margin-top: 12px;">
-          <div class="sk-box sk-pill" style="height: 42px; width: 100%;"></div>
-          <div class="sk-box sk-pill" style="height: 42px; width: 100%;"></div>
-          <div class="sk-box sk-pill" style="height: 42px; width: 100%;"></div>
-          <div class="sk-box sk-pill" style="height: 42px; width: 100%;"></div>
-          <div class="sk-box sk-pill" style="height: 42px; width: 100%;"></div>
-          <div class="sk-box sk-pill" style="height: 42px; width: 100%;"></div>
-        </nav>
-        <div class="sidebar-bottom" style="margin-top: auto; padding: 18px 8px 0; display: flex; align-items: center; gap: 10px;">
-          <div class="sk-box sk-circle" style="width: 36px; height: 36px;"></div>
-          <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
-            <div class="sk-box" style="width: 80px; height: 13px;"></div>
-            <div class="sk-box" style="width: 105px; height: 10px;"></div>
-          </div>
-        </div>
-      </aside>
-
-      <main class="chat-main">
-        <div class="chat-layout" style="width: 100%; max-width: 1100px; margin: 0 auto; flex: 1; display: flex; flex-direction: column;">
-          <div class="chat-panel" style="flex: 1; display: flex; flex-direction: column; background: #fff; border: 1px solid var(--line); border-radius: 14px; overflow: hidden;">
-            
-            <div style="padding: 18px 24px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <div class="sk-box" style="width: 85px; height: 10px; margin-bottom: 8px;"></div>
-                <div class="sk-box" style="width: 220px; height: 22px; margin-bottom: 6px;"></div>
-                <div class="sk-box" style="width: 140px; height: 11px;"></div>
-              </div>
-              <div style="display: flex; gap: 8px;">
-                <div class="sk-box sk-pill" style="width: 85px; height: 32px;"></div>
-                <div class="sk-box sk-pill" style="width: 34px; height: 32px;"></div>
-              </div>
-            </div>
-
-            <div style="margin: 12px 24px;">
-              <div class="sk-box" style="width: 100%; height: 36px; border-radius: 6px;"></div>
-            </div>
-
-            <div style="flex: 1; padding: 16px 24px; display: flex; flex-direction: column; gap: 18px; overflow: hidden;">
-              <div style="display: flex; gap: 12px; align-items: flex-start;">
-                <div class="sk-box sk-circle" style="width: 36px; height: 36px; flex-shrink: 0;"></div>
-                <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
-                  <div class="sk-box" style="width: 110px; height: 11px;"></div>
-                  <div class="sk-box" style="width: 48%; height: 36px; border-radius: 12px;"></div>
-                </div>
-              </div>
-
-              <div style="display: flex; gap: 12px; align-items: flex-start;">
-                <div class="sk-box sk-circle" style="width: 36px; height: 36px; flex-shrink: 0;"></div>
-                <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
-                  <div class="sk-box" style="width: 130px; height: 11px;"></div>
-                  <div class="sk-box" style="width: 68%; height: 48px; border-radius: 12px;"></div>
-                </div>
-              </div>
-
-              <div style="display: flex; gap: 12px; align-items: flex-start;">
-                <div class="sk-box sk-circle" style="width: 36px; height: 36px; flex-shrink: 0;"></div>
-                <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
-                  <div class="sk-box" style="width: 95px; height: 11px;"></div>
-                  <div class="sk-box" style="width: 32%; height: 32px; border-radius: 12px;"></div>
-                </div>
-              </div>
-
-              <div style="display: flex; gap: 12px; align-items: flex-start;">
-                <div class="sk-box sk-circle" style="width: 36px; height: 36px; flex-shrink: 0;"></div>
-                <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
-                  <div class="sk-box" style="width: 140px; height: 11px;"></div>
-                  <div class="sk-box" style="width: 58%; height: 42px; border-radius: 12px;"></div>
-                </div>
-              </div>
-            </div>
-
-            <div style="padding: 14px 20px; border-top: 1px solid var(--line); display: flex; gap: 10px;">
-              <div class="sk-box sk-pill" style="flex: 1; height: 44px;"></div>
-              <div class="sk-box sk-circle" style="width: 44px; height: 44px; flex-shrink: 0;"></div>
-            </div>
-
-          </div>
-        </div>
-      </main>
-    </div>
-  `;
-}
 
 function render() {
   const appEl = document.querySelector('#app');
   if (!appEl) return;
   if (initialBootLoading) {
-    appEl.innerHTML = renderSkeleton();
+    if (!appEl.querySelector('.startup-screen')) appEl.innerHTML = startupMarkup;
     return;
   }
   if (bootConnectionFailed) {
