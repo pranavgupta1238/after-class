@@ -1,3 +1,4 @@
+import { installConnections } from './connections.js';
 import './style.css';
 import './campus.css';
 import './experience.css';
@@ -507,7 +508,7 @@ function renderCampusMessageHtml(m) {
   const id = escapeHtml(m.id || '');
   return `<div class="message-swipe-row" data-msg-id="${id}"><div class="swipe-reply-cue" aria-hidden="true">${uiIcon('reply')}</div>
     <div class="message ${isMine ? 'is-mine' : ''}" data-msg-id="${id}" data-sender="${escapeHtml(name)}" data-text="${escapeHtml(text)}">
-      ${avatar(name)}<div class="message-content-col"><div class="message-meta"><b>${escapeHtml(isMine ? 'You' : name)}</b><time>${time}</time></div>
+      ${avatar(name)}<div class="message-content-col"><div class="message-meta"><b>${!isMine&&m.senderId?`<button class="link" onclick="cx.viewProfile('${escapeQuotes(m.senderId)}')">${escapeHtml(name)}</button>`:escapeHtml(isMine ? 'You' : name)}</b><time>${time}</time></div>
       ${replyTo ? `<button class="quoted-reply-box" data-jump-message="${escapeHtml(replyTo.id)}"><span class="quoted-reply-body"><strong class="quoted-reply-sender">${escapeHtml(replyTo.sender)}</strong><span class="quoted-reply-text">${formatMessageContent(replyTo.text)}</span></span></button>` : ''}
       <div class="message-body">${formatMessageContent(text)}</div>
       ${renderMessageReactionsHtml(m.reactions || [], id)}
@@ -798,6 +799,7 @@ function home() {
   ];
   return layout(`<div class="social-home">
     <section class="social-heading"><div><span class="social-dateline">${new Date().toLocaleDateString([], {weekday:'long',day:'numeric',month:'long'})}</span><h1>Make time<br>for <em>someone.</em></h1></div><div class="social-intro"><p>A free hour is a good place to start.</p><button class="primary" onclick="openComposer()">Create a plan</button></div></section>
+    ${cx.availability()}
     <section class="social-intentions" aria-label="Plan ideas">${ideas.map((idea,i)=>`<button class="social-idea social-idea-${idea.id}" onclick="startHomePlan('${idea.id}')"><div class="social-idea-top"><span>${idea.duration}</span><span class="idea-number">0${i+1}</span></div><div class="social-idea-art" aria-hidden="true">${uiIcon(idea.id)}</div><h2>${idea.title}</h2><p>${idea.detail}</p><span class="idea-action">Make this plan</span></button>`).join('')}</section>
     <div class="social-bottom"><section class="social-feed"><div class="social-feed-heading"><h2>Find your company</h2><div class="availability-tabs" role="group" aria-label="When are you free">${[['today','Today'],['tomorrow','Tomorrow'],['week','This week']].map(([v,l])=>`<button aria-pressed="${homeWhen===v}" onclick="setHomeWhen('${v}')">${l}</button>`).join('')}</div></div>
     <div class="request-grid campus-plan-grid">${planLoadState() || (plans.length?plans.slice(0,2).map(card).join(''):`<div class="social-empty"><span aria-hidden="true">${uiIcon('calendar')}</span><div><h3>No plans ${homeWhen==='week'?'this week':homeWhen}</h3><p>Be the first to put something on the calendar.</p></div><button class="link" onclick="openComposer()">Add yours</button></div>`)}</div>${plans.length?'<button class="social-view-all" onclick="exploreHomePlans()">View matching plans</button>':''}</section>
@@ -822,13 +824,13 @@ function planCard(plan, owned = false) {
   const handlerId = escapeQuotes(String(plan.id));
   const interests = Math.max(0, Number(plan.pendingApplicantsCount) || 0);
   return `<article class="ac-plan ${owned ? 'ac-plan-owned' : ''}" data-category="${activity.id}">
-    <div class="ac-plan-cover"><span class="ac-plan-emblem" aria-hidden="true">${uiIcon(activity.id)}</span><span class="ac-plan-category">${activity.label}</span>
+    <div class="ac-plan-cover"><span class="ac-plan-emblem" aria-hidden="true">${uiIcon(activity.id)}</span><span class="ac-plan-category">${plan.connectionMode==='dating'?'Date · ':''}${activity.label}</span>
       ${owned ? `<span class="ac-plan-status ${active ? 'is-open' : ''}">${status}</span>` : `<button class="ac-save ${saved ? 'is-saved' : ''}" data-save-plan="${id}" aria-label="${saved ? 'Unsave' : 'Save'} ${escapeHtml(plan.activity)}" aria-pressed="${saved}">${uiIcon('bookmark')}</button>`}
     </div>
     <div class="ac-plan-body"><div class="ac-plan-intro"><time class="ac-date" datetime="${escapeHtml(valid ? date.toISOString() : '')}" aria-label="${escapeHtml(valid ? date.toLocaleDateString([], { dateStyle: 'full' }) : 'Date not set')}"><span>${valid ? date.toLocaleDateString([], { month: 'short' }) : 'Date'}</span><strong>${valid ? date.getDate() : '—'}</strong></time><div class="ac-plan-copy"><h3>${renderExpressions(escapeHtml(plan.activity || 'Campus plan'))}</h3><p class="ac-plan-when">${valid ? `${date.toLocaleDateString([], { weekday: 'long' })} · ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${owned && !active ? ` · ${date.getFullYear()}` : ''}` : 'Time to be confirmed'}</p></div></div>
       <p class="ac-plan-place">${uiIcon('pin')}<span>${escapeHtml(plan.location || 'Campus')}</span></p>
     </div>
-    <div class="ac-plan-footer">${owned ? `<span class="ac-interest-count">${uiIcon('people')}${interests ? `${interests} interested` : active ? 'No interest yet' : 'No pending interest'}</span><div class="ac-plan-actions">${active ? `${interests ? `<button class="ac-button" onclick="viewPlanInterest()">View interest</button>` : ''}<button class="ac-button ac-button-quiet" onclick="closeMyPlan('${handlerId}')">Close plan</button>` : `<button class="ac-button" onclick="repeatMyPlan('${handlerId}')">${uiIcon('repeat')} Plan again</button>`}</div>` : `<div class="ac-plan-host">${avatar(plan.host?.username || 'Student')}<span>${escapeHtml(isMine ? 'Your invitation' : plan.host?.username || 'Student')}</span></div>${isMine ? '<button class="ac-button" onclick="manageMyPlans()">Manage plan</button>' : plan.hasApplied ? `<span class="ac-sent">${uiIcon('check')} Interest sent</span>` : `<button class="ac-button ac-button-primary" data-join-plan="${id}">I’m interested</button>`}`}</div>
+    <div class="ac-plan-footer">${owned ? `<span class="ac-interest-count">${uiIcon('people')}${interests ? `${interests} interested` : active ? 'No interest yet' : 'No pending interest'}</span><div class="ac-plan-actions">${active ? `${interests ? `<button class="ac-button" onclick="viewPlanInterest()">View interest</button>` : ''}<button class="ac-button ac-button-quiet" onclick="closeMyPlan('${handlerId}')">Close plan</button>` : `<button class="ac-button" onclick="repeatMyPlan('${handlerId}')">${uiIcon('repeat')} Plan again</button>`}</div>` : `<div class="ac-plan-host">${avatar(plan.host?.username || 'Student')}<span>${!isMine&&plan.host?.id?`<button class="link" onclick="cx.viewProfile('${escapeQuotes(plan.host.id)}','${plan.connectionMode==='dating'?'dating':'social'}')">${escapeHtml(plan.host.username)}</button>`:escapeHtml(isMine?'Your invitation':plan.host?.username||'Student')}</span></div>${isMine ? '<button class="ac-button" onclick="manageMyPlans()">Manage plan</button>' : plan.hasApplied ? `<span class="ac-sent">${uiIcon('check')} Interest sent</span>` : `<button class="ac-button ac-button-primary" data-join-plan="${id}">I’m interested</button>`}`}</div>
   </article>`;
 }
 
@@ -857,6 +859,7 @@ function discoveryCount() {
 function discover() {
   const filter = state.discoverFilter || 'all';
   return layout(`<section class="portal-heading"><div><h1>Discover</h1></div><button class="primary" onclick="openComposer()">＋ Create a plan</button></section>
+    ${cx.modes()}
     <section class="discovery-tools" aria-label="Filter campus plans"><div class="discovery-search-row"><label class="discovery-search"><span aria-hidden="true">⌕</span><input type="search" id="plan-search" value="${escapeHtml(discovery.query)}" placeholder="Try chai, library, badminton…" aria-label="Search activities or locations" oninput="searchCampusPlans(this.value)"></label><label class="discovery-select">When<select onchange="setPlanOption('when',this.value)">${[['any','Any time'],['today','Today'],['tomorrow','Tomorrow'],['week','Next 7 days']].map(([v,l])=>`<option value="${v}" ${discovery.when===v?'selected':''}>${l}</option>`).join('')}</select></label></div>
     <div class="activity-filters" role="group" aria-label="Activity type">${ACTIVITIES.map(a=>`<button aria-pressed="${discovery.category===a.id}" class="${discovery.category===a.id?'selected':''}" onclick="setPlanOption('category','${a.id}')">${uiIcon(a.id)} ${a.label}</button>`).join('')}</div></section>
     <div class="discovery-results-bar"><div class="discovery-tabs"><button class="${filter==='all'?'selected':''}" aria-pressed="${filter==='all'}" onclick="setDiscoverFilter('all')">All plans</button><button class="${filter==='saved'?'selected':''}" aria-pressed="${filter==='saved'}" onclick="setDiscoverFilter('saved')">Saved</button></div><label class="discovery-sort">Sort by<select aria-label="Sort plans" onchange="setPlanOption('sort',this.value)"><option value="soonest" ${discovery.sort==='soonest'?'selected':''}>Happening soonest</option><option value="newest" ${discovery.sort==='newest'?'selected':''}>Recently posted</option></select></label></div>
@@ -958,8 +961,8 @@ function inbox() {
       <button class="${activeTab === 'my-plans' ? 'active' : ''}" aria-pressed="${activeTab === 'my-plans'}" onclick="setInboxTab('my-plans')">Your plans <span class="inbox-tab-count">${currentPlans.length}</span></button>
     </div>
     ${activeTab === 'matches' ? `<div class="inbox-workspace"><div class="inbox-list-pane"><div class="inbox-list-heading"><h2>Messages</h2><span>${state.matches.length}</span></div>
-      ${state.pendingApplications.length ? `<section class="ac-inbox-section"><h2>Invitations to connect <span>${state.pendingApplications.length}</span></h2><div class="ac-conversation-list">${state.pendingApplications.map(a => `<article class="ac-conversation ac-invitation" data-category="${activityFor(a).id}"><div class="ac-conversation-symbol" aria-hidden="true">${uiIcon(activityFor(a).id)}</div><div class="ac-conversation-copy"><h3>${renderExpressions(escapeHtml(a.activity))}</h3><p>Someone would like to join you.</p></div><button class="ac-button ac-button-primary" onclick="acceptApplication('${escapeQuotes(a.id)}')">Accept invitation</button></article>`).join('')}</div></section>` : ''}
-      ${state.matches.length ? `<section class="ac-inbox-section"><h2>Your conversations</h2><div class="ac-conversation-list">${state.matches.map(m => `<article class="ac-conversation"><div class="ac-conversation-person">${avatar(m.other?.username || 'Student', false, Boolean(m.other?.isVerified))}</div><div class="ac-conversation-copy"><h3>${escapeHtml(m.other?.username || 'Student')}</h3><p>${renderExpressions(escapeHtml(m.activity || 'Campus plan'))}</p>${m.location ? `<span class="ac-conversation-place">${uiIcon('pin')}${escapeHtml(m.location)}</span>` : ''}</div><button class="ac-button" onclick="openPrivateChat('${escapeQuotes(m.id)}')">Open chat</button></article>`).join('')}</div></section>` : ''}
+      ${state.pendingApplications.length ? `<section class="ac-inbox-section"><h2>Invitations to connect <span>${state.pendingApplications.length}</span></h2><div class="ac-conversation-list">${state.pendingApplications.map(a => `<article class="ac-conversation ac-invitation" data-category="${activityFor(a).id}"><div class="ac-conversation-symbol" aria-hidden="true">${uiIcon(activityFor(a).id)}</div><div class="ac-conversation-copy"><h3>${renderExpressions(escapeHtml(a.activity))}</h3><p>${escapeHtml(a.applicant?.username||'Someone')} would like to join you.</p>${a.applicant?.id?`<button class="link" onclick="cx.viewProfile('${escapeQuotes(a.applicant.id)}')">View profile</button>`:''}</div><button class="ac-button ac-button-primary" onclick="acceptApplication('${escapeQuotes(a.id)}')">Accept invitation</button></article>`).join('')}</div></section>` : ''}
+      ${state.matches.length ? `<section class="ac-inbox-section"><h2>Your conversations</h2><div class="ac-conversation-list">${state.matches.map(m => `<article class="ac-conversation"><div class="ac-conversation-person">${avatar(m.other?.username || 'Student', false, Boolean(m.other?.isVerified))}</div><div class="ac-conversation-copy"><h3>${escapeHtml(m.other?.username || 'Student')}</h3><p>${renderExpressions(escapeHtml(m.activity || 'Campus plan'))}</p>${m.location ? `<span class="ac-conversation-place">${uiIcon('pin')}${escapeHtml(m.location)}</span>` : ''}</div>${m.status==='active'?`<button class="ac-button" onclick="openPrivateChat('${escapeQuotes(m.id)}')">Open chat</button>`:''}${cx.meetingButton(m)}</article>`).join('')}</div></section>` : ''}
       ${!state.matches.length && !state.pendingApplications.length ? `<div class="inbox-list-empty">${uiIcon('inbox')}<strong>No conversations yet</strong><p>Accepted invitations appear here.</p></div>` : ''}
       <button class="inbox-campus-link" onclick="go('chat')">${uiIcon('people')}<span>Campus chat<small>Open to your campus</small></span></button></div>
       <section class="inbox-start-pane"><div class="inbox-mark" aria-hidden="true"><span>${uiIcon('chat')}</span><span>${uiIcon('chat')}</span></div><h2>${state.matches.length ? 'Keep the conversation going.' : 'Good company starts here.'}</h2><p>${state.matches.length ? 'Open a conversation to catch up and make your next plan.' : 'Meet over a plan. Stay in touch here.'}</p><button class="ac-button ac-button-primary" onclick="go('discover')">Explore plans</button><div class="inbox-privacy">${uiIcon('lock')} Private chats. Mutual connections.</div></section></div>
@@ -977,7 +980,7 @@ function safety() {
       <details name="safety-topics"><summary><span class="safety-control-icon">${icons.chat}</span><span>Something felt wrong?<span class="safety-summary-detail">Report a message for review.</span></span><i aria-hidden="true">＋</i></summary><div class="safety-answer"><p>Open the message’s actions, choose Report, and select a reason. A moderator can review the surrounding conversation and take action.</p><button class="link" onclick="go('chat')">Open campus chat</button></div></details>
       <details name="safety-topics"><summary><span class="safety-control-icon">${icons.safety}</span><span>What verification means<span class="safety-summary-detail">A reviewed account. Not a safety guarantee.</span></span><i aria-hidden="true">＋</i></summary><div class="safety-answer"><p>Verification records that an account has passed the current review process. It does not guarantee someone’s intentions or behaviour. Keep personal details private until you feel comfortable.</p></div></details>
     </section></div>
-    <footer class="meeting-guide" aria-labelledby="meeting-guide-title"><div><h2 id="meeting-guide-title">Before you meet</h2><p>Keep the first plan simple.</p></div><ol><li><span>01</span><strong>Choose a public spot</strong><p>A café, library, or busy campus space.</p></li><li><span>02</span><strong>Let a friend know</strong><p>Share the place and time with someone you trust.</p></li><li><span>03</span><strong>Keep your options open</strong><p>You can change your mind or leave at any time.</p></li></ol></footer>
+    ${cx.safetyLinks()}<footer class="meeting-guide" aria-labelledby="meeting-guide-title"><div><h2 id="meeting-guide-title">Before you meet</h2><p>Keep the first plan simple.</p></div><ol><li><span>01</span><strong>Choose a public spot</strong><p>A café, library, or busy campus space.</p></li><li><span>02</span><strong>Let a friend know</strong><p>Share the place and time with someone you trust.</p></li><li><span>03</span><strong>Keep your options open</strong><p>You can change your mind or leave at any time.</p></li></ol></footer>
   </section>`);
 }
 
@@ -1160,7 +1163,7 @@ function adminPortal() {
       <section class="admin-header-card">
         <div class="admin-header-left">
 
-          <h1 class="admin-title">Moderation</h1>
+          <h1 class="admin-title">Moderation</h1><button class="link" onclick="cx.adminAppeals()">Verification appeals</button>
           <p class="workspace-subtitle">${escapeHtml(me.university || 'NIIT University')} · Review workspace</p>
         </div>
         <div class="admin-header-actions">
@@ -2252,7 +2255,7 @@ function settings() {
   const row = (title, description, control) => `<div class="preference-row"><div><strong>${title}</strong><small>${description}</small></div>${control}</div>`;
   return layout(`<section class="portal-heading"><div><h1>Settings</h1></div></section>
     <div class="account-layout"><div class="account-summary">${avatar(me?.avatarConfig || me?.username || 'Guest',false,Boolean(me?.isVerified))}<h2>${escapeHtml(me?.username || 'Guest')}</h2><p>${escapeHtml(me?.university || 'NIIT University')}</p><span class="account-status">${me?.isVerified ? 'Verified student' : me ? 'Student account' : 'Not signed in'}</span><button class="secondary" onclick="${me?'openAvatarPreview()':'openAuth()'}">${me?'View profile':'Sign in'}</button>${me?.isAdmin?`<button class="account-admin" onclick="go('admin')">Moderation workspace</button>`:''}</div>
-    <div class="account-sections"><section class="preference-group"><h2>Profile & privacy</h2>
+    <div class="account-sections">${cx.settings()}<section class="preference-group"><h2>Profile & privacy</h2>
       ${row('Campus alias','Your public name on Afterclass.',`<span>${escapeHtml(me?.username || 'Guest')}</span>`)}
       ${row('Student verification',me?.isVerified?'Your student profile is verified.':me?.verificationStatus==='pending'?'Your submission is awaiting review.':me?.verificationStatus==='rejected'?'Submit a new photo for review.':'Verify your student profile.',me?.isVerified?'<span class="account-status">Verified</span>':me?`<div class="preference-actions">${me.verificationStatus==='pending'?`<button class="secondary" onclick="loadMe()">Check status</button>`:''}<button class="secondary" onclick="openVerificationModal()">${me.verificationStatus==='pending'?'Retake':'Verify'}</button></div>`:`<button class="secondary" onclick="openAuth()">Sign in</button>`)}
       ${row('Identity sharing','Reveal your identity only when you both agree.',`<button class="link" onclick="go('safety')">Privacy & safety</button>`)}
@@ -2276,6 +2279,7 @@ window.switchAuthShowcase = function(tab) {
 };
 
 function authPage() {
+  if (cx.isReview()) return cx.reviewEntry();
   const step = state.authStep || (state.authOtpSent ? 'otp' : 'welcome');
   const pendingEmail = state.authPendingEmail || '';
   const selectedGender = state.authSelectedGender || 'prefer_not_to_say';
@@ -2719,7 +2723,7 @@ function openComposer() {
       <div class="ac-composer-heading"><span aria-hidden="true">${uiIcon('calendar')}</span><h2>Create a plan</h2></div>
       <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">One-to-one plans pair a verified man with a verified woman.</p>
 
-      <form onsubmit="createPlan(event)">
+      <form onsubmit="createPlan(event)">${cx.composerMode()}
         <div class="composer-field-group">
           <label for="plan-activity">Activity
             <input id="plan-activity" placeholder="e.g. Coffee & study session" required maxlength="100">
@@ -2876,7 +2880,7 @@ function renderCampusMembersList(members) {
         </div>
         <div class="member-info-col">
           <div class="member-name-row">
-            <strong class="member-alias">${safeName}</strong>
+            <strong class="member-alias">${isMe?safeName:`<button class="link" onclick="cx.viewProfile('${escapeQuotes(m.id)}')">${safeName}</button>`}</strong>
             ${isMe ? '<span class="member-badge me">You</span>' : ''}
           </div>
           <div class="member-meta-row">
@@ -3639,7 +3643,7 @@ function renderPrivateModal() {
         ${avatar(match.other?.avatarConfig || otherName, false)}
         <div>
           <h2 style="font-size: 18px; margin: 0; color: var(--ink); display: flex; align-items: center; gap: 6px;">
-            <span style="display:inline-block;width:7px;height:7px;background:#7fdc8a;border-radius:50%;"></span>
+
             ${otherName}
           </h2>
           <small class="muted" style="font-size: 12px;">Plan: <b>${match.activity}</b> · ${match.location || 'Campus'}</small>
@@ -3682,6 +3686,7 @@ function renderPrivateModal() {
       </div>
     `}
 
+    <div class="cx-inline-actions">${cx.meetingButton(match)}</div>
     ${renderLocationPanelHtml(match, otherName)}
 
     <div class="private-chat-area" id="private-messages">
@@ -3725,7 +3730,7 @@ function renderPrivateModal() {
 window.go = (v, replace = false) => {
   dismissReactionPicker();
   // If authenticated but unverified non-admin, restrict to verification onboarding
-  if (state.me && !state.me.isVerified && !state.me.isAdmin && v !== 'verification' && v !== 'auth') {
+  if (state.me && !state.me.isVerified && !state.me.isAdmin && !['verification','auth','safety','settings'].includes(v)) {
     v = 'verification';
   }
   if (state.view === v && !replace) return;
@@ -4006,7 +4011,7 @@ window.createPlan = async e => {
 
     await api('/match-requests', {
       method: 'POST',
-      body: JSON.stringify({ activity, location: where, scheduledAt: chosen.toISOString() })
+      body: JSON.stringify({ activity, location: where, scheduledAt: chosen.toISOString(), connectionMode: document.querySelector('#plan-mode')?.value || 'social' })
     });
     closeModal();
     toast(`Plan created! Students on campus can now apply.`);
@@ -4333,7 +4338,7 @@ async function loadMe() {
       }
     }
     if (state.me && !state.me.isVerified && !state.me.isAdmin) {
-      if (state.view !== 'verification') {
+      if (!['verification','safety','settings'].includes(state.view)) {
         state.view = 'verification';
         try { window.history.replaceState({ view: 'verification' }, '', '/verification'); } catch {}
       }
@@ -4360,25 +4365,31 @@ async function loadMe() {
 }
 
 let discoverLoading = false;
+let discoverController = null;
 async function loadDiscover() {
-  if (discoverLoading) return;
   if (!state.me) return;
+  discoverController?.abort();
+  const controller = new AbortController();
+  discoverController = controller;
+  const accountId = state.me.id;
   discoverLoading = true;
   discoverStatus = 'loading';
   if (state.view === 'discover' || state.view === 'home') render();
-  const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
   try {
-    const data = await api('/match-requests', { signal: controller.signal });
+    const data = await api('/match-requests?mode=' + (state.view==='home'?'social':cx.mode()), { signal: controller.signal });
+    if(controller!==discoverController || accountId!==state.me?.id)return;
     if (!Array.isArray(data.requests)) throw new Error('Invalid plans response');
     state.requests = data.requests;
     discoverStatus = 'ready';
   } catch {
-    discoverStatus = 'error';
+    if(controller===discoverController)discoverStatus = 'error';
   } finally {
     clearTimeout(timeout);
-    discoverLoading = false;
-    if (state.view === 'discover' || state.view === 'home') render();
+    if(controller===discoverController){
+      discoverLoading = false;
+      if (state.view === 'discover' || state.view === 'home') render();
+    }
   }
 }
 
@@ -4517,7 +4528,7 @@ function setCampusPresence(count) {
 
 function initSocket() {
   if (socket || !state.me) return;
-  const socketUrl = import.meta.env.VITE_API_URL ? new URL(import.meta.env.VITE_API_URL).origin : location.origin;
+  const socketUrl = import.meta.env.VITE_API_URL ? new URL(import.meta.env.VITE_API_URL, location.origin).origin : location.origin;
   socket = io(socketUrl, { withCredentials: true });
 
   // The server joins the authenticated user's own campus and account rooms.
@@ -4803,6 +4814,8 @@ function initSocket() {
     }
   });
 
+  socket.on('connections:changed', () => { setCachedMessages([]); state.messages=[]; state.matches=[]; window.closeModal(); location.reload(); });
+  socket.on('meeting:updated', async () => { await loadInbox(); });
   socket.on('user:verification_rejected', ({ reason, correctedGender } = {}) => {
     toast(`⚠️ Student verification rejected: ${reason || 'Gesture did not match prompt'}`);
     if (state.me) {
@@ -4845,22 +4858,22 @@ function verificationPage() {
       <main style="position:relative;z-index:1;max-width:640px;margin:32px auto;padding:0 20px 48px;">
         <div style="text-align:center;margin-bottom:28px;">
           <span class="eyebrow" style="color:var(--green);font-weight:700;">STEP 2 OF 2 · STUDENT VERIFICATION</span>
-          <h1 style="font:600 32px 'Playfair Display';margin:8px 0 10px;color:var(--ink);">Verify Your Identity to Enter</h1>
+          <h1 style="font:600 32px 'Playfair Display';margin:8px 0 10px;color:var(--ink);">Verify Your Identity to Enter</h1>${isRejected?`<button class="secondary" onclick="cx.safety('appeals')">Appeal this decision</button>`:''}
           <p style="font-size:14px;color:var(--muted);line-height:1.6;margin:0 auto;max-width:480px;">
-            Afterclass is an authentic campus community. To keep students safe and stop catfishing, every student completes a quick 5-second live selfie check before entering.
+            Afterclass is an authentic campus community. Complete a live selfie check for moderator review before connecting with other students.
           </p>
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:24px;">
           <div style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.02);">
             <span style="font-size:24px;display:block;margin-bottom:6px;">🛡️</span>
-            <strong style="font-size:13px;display:block;color:var(--ink);margin-bottom:4px;">No Catfishing</strong>
-            <small style="font-size:11px;color:var(--muted);line-height:1.4;display:block;">Verified genders keep female &amp; campus spaces 100% safe.</small>
+            <strong style="font-size:13px;display:block;color:var(--ink);margin-bottom:4px;">Reviewed account</strong>
+            <small style="font-size:11px;color:var(--muted);line-height:1.4;display:block;">An approved account is not a guarantee of safety. Meet in public and choose what to share.</small>
           </div>
           <div style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.02);">
             <span style="font-size:24px;display:block;margin-bottom:6px;">🔒</span>
-            <strong style="font-size:13px;display:block;color:var(--ink);margin-bottom:4px;">0 KB Storage</strong>
-            <small style="font-size:11px;color:var(--muted);line-height:1.4;display:block;">Selfies are permanently deleted immediately upon verification.</small>
+            <strong style="font-size:13px;display:block;color:var(--ink);margin-bottom:4px;">Private review</strong>
+            <small style="font-size:11px;color:var(--muted);line-height:1.4;display:block;">Verification photos are removed after approval or rejection.</small>
           </div>
           <div style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.02);">
             <span style="font-size:24px;display:block;margin-bottom:6px;">✦</span>
@@ -4904,7 +4917,7 @@ function verificationPage() {
               Your previous verification attempt could not be approved. Please ensure your live selfie clearly matches the gesture prompt and that your declared profile gender (${me?.gender === 'woman' ? 'Woman 👩' : 'Man 👨'}) is accurate.
             </p>
             <button type="button" class="primary" onclick="openVerificationModal()" style="padding:12px 28px;font-size:14px;">
-              📸 Retake Live Face Verification
+              Retake verification
             </button>
           ` : `
             <div style="width:68px;height:68px;border-radius:50%;background:#e0f2fe;color:#0284c7;display:grid;place-items:center;font-size:32px;margin:0 auto 16px;">
@@ -4942,6 +4955,7 @@ function verificationPage() {
   `;
 }
 
+const cx = installConnections({state,api,modal,closeModal:()=>window.closeModal(),render,toast:t=>window.toast(t),escapeHtml,avatar,loadDiscover,loadInbox,openComposer});
 const views = { home, discover, chat, inbox, safety, settings, auth: authPage, admin: adminPortal, verification: verificationPage };
 
 function getViewFromPath(pathname) {

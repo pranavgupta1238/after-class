@@ -1,4 +1,4 @@
-require('dotenv').config?.();
+if (process.env.AFTERCLASS_REVIEW !== '1') require('dotenv').config?.();
 const express = require('express');
 const http = require('http');
 const path = require('path');
@@ -14,6 +14,9 @@ const matchService = require('./match-service');
 const { canPair } = require('./match-policy');
 const adminReports = require('./admin-reports');
 const redis = require('./redis');
+const connectionPolicy = require('./connection-policy');
+const { registerConnections } = require('./connections');
+const SESSION_COOKIE = process.env.SESSION_COOKIE_NAME || 'session';
 
 const app = express();
 const server = http.createServer(app);
@@ -21,6 +24,7 @@ const io = new Server(server, { cors: { origin: process.env.CLIENT_URL || 'http:
 
 const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || '0.0.0.0';
+const reviewMode = process.env.AFTERCLASS_REVIEW === '1' && process.env.NODE_ENV !== 'production' && HOST === '127.0.0.1' && /^postgresql:\/\/[^@]+@127\.0\.0\.1:55432\/afterclass_review$/.test(process.env.DATABASE_URL || '');
 const SECRET = process.env.JWT_SECRET || 'local-development-secret-change-me';
 const OTP_PEPPER = process.env.OTP_PEPPER || SECRET;
 
@@ -196,7 +200,7 @@ async function deliverWarningEmail(email, { alias, reason, campusName }) {
 // Auth middleware — reads Prisma user with campus included on every request.
 async function auth(req, res, next) {
   try {
-    const raw = req.cookies.session || req.headers.authorization?.replace('Bearer ', '');
+    const raw = req.cookies[SESSION_COOKIE] || req.headers.authorization?.replace('Bearer ', '');
     const p = jwt.verify(raw, SECRET, { issuer: 'afterclass', audience: 'afterclass-web' });
     const user = await prisma.user.findUnique({ where: { id: p.sub }, include: { campus: true } });
     if (accountUnavailable(user) || p.sv !== (user.sessionVersion || 0)) return res.status(401).json({ error: 'Account unavailable' });
@@ -333,6 +337,14 @@ app.get('/health', async (req, res) => {
 
 // ── Auth ────────────────────────────────────────────────────────────────────
 
+// The isolated review build uses only seeded demo sessions, never live OAuth or OTP.
+app.use('/api/auth', (req,res,next)=>{
+  if(!reviewMode || ['/logout','/logout-all'].includes(req.path))return next();
+  res.set('Cache-Control','no-store');
+  if(req.method==='GET')return res.redirect('/auth');
+  return res.status(409).json({error:'Choose a demo account on the review sign-in page.'});
+});
+
 app.post('/api/auth/send-otp', async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
   const gender = String(req.body.gender || '').trim();
@@ -387,7 +399,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
   } else if (userGender !== 'prefer_not_to_say' && user.gender === 'prefer_not_to_say') {
     user = await prisma.user.update({ where: { id: user.id }, data: { gender: userGender }, include: { campus: true } });
   }
-  res.cookie('session', token(user), { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 2592000000, path: '/' });
+  res.cookie(SESSION_COOKIE, token(user), { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 2592000000, path: '/' });
   res.json({ user: publicUser(user) });
 });
 
@@ -679,7 +691,7 @@ app.get('/api/auth/google/callback', async (req, res) => {
     }
 
     // 6. Set session cookie and redirect to campus chat
-    res.cookie('session', token(user), {
+    res.cookie(SESSION_COOKIE, token(user), {
       httpOnly: true,
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
@@ -728,19 +740,19 @@ app.post('/api/auth/google-fast', async (req, res) => {
       include: { campus: true }
     });
   }
-  res.cookie('session', token(user), { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 2592000000, path: '/' });
+  res.cookie(SESSION_COOKIE, token(user), { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 2592000000, path: '/' });
   res.json({ user: publicUser(user) });
 });
 
 // Log out from current device only
 app.post('/api/auth/logout', auth, (req, res) => {
-  res.clearCookie('session', { path: '/' }).json({ ok: true });
+  res.clearCookie(SESSION_COOKIE, { path: '/' }).json({ ok: true });
 });
 
 // Log out from all devices globally
 app.post('/api/auth/logout-all', auth, async (req, res) => {
   await prisma.user.update({ where: { id: req.user.id }, data: { sessionVersion: (req.user.sessionVersion || 0) + 1 } });
-  res.clearCookie('session', { path: '/' }).json({ ok: true, revokedAll: true });
+  res.clearCookie(SESSION_COOKIE, { path: '/' }).json({ ok: true, revokedAll: true });
 });
 
 app.get('/api/me', auth, async (req, res) => {
@@ -787,7 +799,8 @@ app.patch('/api/users/avatar', auth, async (req, res) => {
 app.get('/api/messages', auth, async (req, res) => {
   try {
     const room = await campusRoom(req.user);
-    const messages = await prisma.message.findMany({ where: { roomId: room.id, isDeleted: false }, orderBy: { createdAt: 'desc' }, take: 50 });
+    const excluded = await connectionPolicy.blockedIds(prisma,req.user.id);
+    const messages = await prisma.message.findMany({ where: { roomId: room.id, isDeleted: false, senderId:{notIn:excluded} }, orderBy: { createdAt: 'desc' }, take: 50 });
     const messageIds = messages.map(m => m.id);
     const reactionsMap = await reactions.getBatchReactions(messageIds, req.user?.id);
     res.json({ messages: messages.reverse().map(m => publicMessage(m, reactionsMap[m.id] || [])) });
@@ -856,16 +869,39 @@ app.get('/api/campus/members', auth, async (req, res) => {
   }
 });
 
+// A block ends active private rooms and any location-sharing session immediately.
+function closeConnectionMatch(m) {
+  activeLocationSessions.delete(m.id);
+  io.to(m.roomId).emit('location:stopped', {matchId:m.id});
+  io.in(m.roomId).socketsLeave(m.roomId);
+  for (const id of [m.userOneId,m.userTwoId]) io.to('user:'+id).emit('match:cancelled', {matchId:m.id});
+}
+registerConnections({app,prisma,auth,requireAdmin,io,closeMatch:closeConnectionMatch});
+
+// Review login is only available with the isolated loopback database and explicit flag.
+app.get('/api/review', (req,res)=>res.json({enabled:reviewMode}));
+if(reviewMode) {
+  app.get('/api/review/accounts',async(req,res)=>res.json({accounts:await prisma.user.findMany({where:{email:{endsWith:'@review.invalid'}},select:{id:true,publicAlias:true,gender:true,isVerified:true}})}));
+  app.post('/api/review/login',async(req,res)=>{
+    const user=await prisma.user.findFirst({where:{id:req.body.id,email:{endsWith:'@review.invalid'}},include:{campus:true}});
+    if(!user) return res.status(404).json({error:'Demo account unavailable.'});
+    res.cookie(SESSION_COOKIE,token(user),{httpOnly:true,sameSite:'strict',path:'/'}).json({ok:true});
+  });
+}
+
 // ── Match requests ──────────────────────────────────────────────────────────
 
 app.get('/api/match-requests', auth, async (req, res) => {
   try {
+    const mode = req.query.mode === 'dating' ? 'dating' : 'social';
+    const excluded = await connectionPolicy.blockedIds(prisma,req.user.id);
+    const viewer = {...req.user,connectionProfile:await prisma.connectionProfile.findUnique({where:{userId:req.user.id}})};
     const requests = await prisma.matchRequest.findMany({
-      where: { campusId: req.user.campusId, status: 'open', expiresAt: { gt: new Date() } },
-      include: { requester: true, applications: { where: { applicantId: req.user.id } } },
+      where: { campusId: req.user.campusId, connectionMode:mode, requesterId:{notIn:excluded}, status: 'open', scheduledAt:{gt:new Date()}, expiresAt: { gt: new Date() } },
+      include: { requester: {include:{connectionProfile:true}}, applications: { where: { applicantId: req.user.id } } },
       orderBy: { createdAt: 'desc' }
     });
-    res.json({ requests: requests.filter(r => r.requesterId === req.user.id || canPair(req.user, r.requester)).map(r => matchService.publicRequest(r, req.user.id)) });
+    res.json({ requests: requests.filter(r => r.requesterId === req.user.id || connectionPolicy.canConnect(viewer, r.requester, mode)).map(r => matchService.publicRequest(r, req.user.id)) });
   } catch { res.status(503).json({ error: 'Matching is unavailable.' }); }
 });
 
@@ -885,7 +921,8 @@ app.post('/api/match-requests', requireVerified, async (req, res) => {
       location: String(location).slice(0, 120),
       scheduledAt: schedDate.toISOString(),
       genderPreference,
-      orientationPreference
+      orientationPreference,
+      connectionMode: req.body.connectionMode
     });
     res.status(201).json({ request });
   } catch (err) {
@@ -905,6 +942,7 @@ app.get('/api/match-requests/mine', auth, async (req, res) => {
       plans: plans.map(p => ({
         id: p.id,
         activity: p.activity,
+        connectionMode: p.connectionMode,
         location: p.location,
         scheduledAt: p.scheduledAt,
         status: p.status,
@@ -919,11 +957,12 @@ app.get('/api/match-requests/mine', auth, async (req, res) => {
 // Must be declared before /api/match-requests/:id to avoid route collision
 app.get('/api/match-requests/mine/applications', auth, async (req, res) => {
   try {
+    const excluded = await connectionPolicy.blockedIds(prisma,req.user.id);
     const applications = await prisma.matchApplication.findMany({
-      where: { request: { requesterId: req.user.id }, status: 'pending' },
-      include: { request: true }
+      where: { request: { requesterId: req.user.id, status:'open', scheduledAt:{gt:new Date()} }, applicantId:{notIn:excluded}, status: 'pending' },
+      include: { request: true, applicant:{select:{id:true,publicAlias:true,isVerified:true}} }
     });
-    res.json({ applications: applications.map(a => ({ id: a.id, requestId: a.requestId, activity: a.request.activity, interestCount: 1 })) });
+    res.json({ applications: applications.map(a => ({ id: a.id, requestId: a.requestId, activity: a.request.activity, interestCount: 1, applicant:{id:a.applicant.id,username:a.applicant.publicAlias,isVerified:a.applicant.isVerified} })) });
   } catch { res.status(503).json({ error: 'Applications unavailable.' }); }
 });
 
@@ -933,6 +972,7 @@ app.delete('/api/match-requests/:id', auth, async (req, res) => {
       where: { id: req.params.id, requesterId: req.user.id }
     });
     if (!plan) return res.status(404).json({ error: 'Plan not found.' });
+    if (plan.status !== 'open') return res.status(409).json({error:'Manage matched meetings from your inbox.'});
     await prisma.matchRequest.update({
       where: { id: plan.id },
       data: { status: 'cancelled', cancelledAt: new Date() }
@@ -967,8 +1007,9 @@ app.post('/api/applications/:id/accept', auth, async (req, res) => {
 
 app.get('/api/matches', auth, async (req, res) => {
   try {
+    const excluded=await connectionPolicy.blockedIds(prisma,req.user.id);
     const matches = await prisma.match.findMany({
-      where: { OR: [{ userOneId: req.user.id }, { userTwoId: req.user.id }] },
+      where: { OR: [{ userOneId: req.user.id }, { userTwoId: req.user.id }], userOneId:{notIn:excluded}, userTwoId:{notIn:excluded} },
       include: {
         request: true,
         revealConsents: true,
@@ -992,6 +1033,11 @@ app.get('/api/matches', auth, async (req, res) => {
         status: m.status,
         roomId: m.roomId,
         disappearingMode: m.disappearingMode || false,
+        revision: m.revision,
+        connectionMode: m.request.connectionMode,
+        myConfirmed: Boolean(m.userOneId===req.user.id?m.confirmedOneAt:m.confirmedTwoAt),
+        otherConfirmed: Boolean(m.userOneId===req.user.id?m.confirmedTwoAt:m.confirmedOneAt),
+        proposal: m.proposedAt ? {scheduledAt:m.proposedAt,location:m.proposedLocation,mine:m.proposedById===req.user.id} : null,
         scheduledAt: m.scheduledAt,
         activity: m.request.activity,
         location: m.request.location,
@@ -1003,6 +1049,14 @@ app.get('/api/matches', auth, async (req, res) => {
     });
     res.json({ matches: result });
   } catch { res.status(503).json({ error: 'Matches unavailable.' }); }
+});
+
+app.use('/api/matches/:id', auth, async(req,res,next)=>{
+  try {
+    const m=await prisma.match.findFirst({where:{id:req.params.id,status:'active',OR:[{userOneId:req.user.id},{userTwoId:req.user.id}]}});
+    if(!m || await connectionPolicy.isBlocked(prisma,m.userOneId,m.userTwoId)) return res.status(404).json({error:'Connection unavailable.'});
+    next();
+  } catch { res.status(400).json({error:'Connection unavailable.'}); }
 });
 
 app.post('/api/matches/:id/disappearing', auth, async (req, res) => {
@@ -1062,30 +1116,6 @@ app.post('/api/matches/:id/reveal', auth, async (req, res) => {
     }
     res.json({ mutual });
   } catch { res.status(500).json({ error: 'Could not process reveal request.' }); }
-});
-
-app.post('/api/matches/:id/cancel', auth, async (req, res) => {
-  try {
-    const match = await prisma.match.findFirst({
-      where: { id: req.params.id, OR: [{ userOneId: req.user.id }, { userTwoId: req.user.id }], status: MatchStatus.active }
-    });
-    if (!match) return res.status(404).json({ error: 'Match not found.' });
-    await prisma.match.update({ where: { id: match.id }, data: { status: MatchStatus.cancelled } });
-    const otherId = match.userOneId === req.user.id ? match.userTwoId : match.userOneId;
-    io.to('user:' + otherId).emit('match:cancelled', { matchId: match.id });
-    res.json({ ok: true });
-  } catch { res.status(500).json({ error: 'Could not cancel match.' }); }
-});
-
-app.post('/api/matches/:id/complete', auth, async (req, res) => {
-  try {
-    const match = await prisma.match.findFirst({
-      where: { id: req.params.id, OR: [{ userOneId: req.user.id }, { userTwoId: req.user.id }], status: MatchStatus.active }
-    });
-    if (!match) return res.status(404).json({ error: 'Match not found.' });
-    await prisma.match.update({ where: { id: match.id }, data: { status: MatchStatus.completed, completedAt: new Date() } });
-    res.json({ ok: true });
-  } catch { res.status(500).json({ error: 'Could not complete match.' }); }
 });
 
 // ── Mutual Live Location Sharing Sessions ──────────────────────────────────
@@ -1212,11 +1242,15 @@ app.post('/api/matches/:id/location/stop', auth, async (req, res) => {
 // ── Reports ─────────────────────────────────────────────────────────────────
 
 app.post('/api/reports', auth, async (req, res) => {
+  try {
   if (!await redis.limit('report:' + req.user.id, 10, 86400000)) return res.status(429).json({ error: 'Report limit reached.' });
-  const { messageId, reason = 'inappropriate_content', detail } = req.body;
-  if (!messageId) return res.status(400).json({ error: 'Message ID is required.' });
-  const message = await prisma.message.findUnique({ where: { id: messageId } });
+  const { messageId, detail } = req.body;
+  const reason = req.body.reason === 'privacy_violation' ? 'other' : (req.body.reason || 'inappropriate_content');
+  if(!['harassment','inappropriate_content','spam','threats','impersonation','other'].includes(reason)) return res.status(400).json({error:'Choose a report reason.'});
+  if (typeof messageId !== 'string' || !/^[0-9a-f-]{36}$/i.test(messageId)) return res.status(400).json({ error: 'A valid message ID is required.' });
+  const message = await prisma.message.findUnique({ where: { id: messageId }, include:{room:{include:{match:true}}} });
   if (!message) return res.status(404).json({ error: 'Message not found.' });
+  if(message.room.campusId!==req.user.campusId || (message.room.kind==='match' && ![message.room.match?.userOneId,message.room.match?.userTwoId].includes(req.user.id))) return res.status(404).json({error:'Message not found.'});
   if (message.senderId === req.user.id) return res.status(400).json({ error: 'You cannot report your own message.' });
   await prisma.report.create({
     data: {
@@ -1229,6 +1263,10 @@ app.post('/api/reports', auth, async (req, res) => {
     }
   });
   res.status(201).json({ ok: true });
+  } catch (err) {
+    console.error('[Report creation error]', err.message);
+    res.status(500).json({error:'Could not send your report. Please try again.'});
+  }
 });
 
 // ── Admin & Moderation Portal Endpoints ─────────────────────────────────────
@@ -1676,7 +1714,7 @@ function socketCookie(socket, name) {
 
 io.use(async (socket, next) => {
   try {
-    const raw = socket.handshake.auth.token || socketCookie(socket, 'session');
+    const raw = socket.handshake.auth.token || socketCookie(socket, SESSION_COOKIE);
     const p = jwt.verify(raw, SECRET, { issuer: 'afterclass', audience: 'afterclass-web' });
     const user = await prisma.user.findUnique({ where: { id: p.sub }, include: { campus: true } });
     if (accountUnavailable(user) || p.sv !== (user.sessionVersion || 0)) throw new Error('Unauthorized');
@@ -1695,6 +1733,19 @@ function broadcastCampusPresence(campusSlug) {
   if (!campusSlug) return;
   const count = getCampusPresenceCount(campusSlug);
   io.to('campus:' + campusSlug).emit('campus:presence', { onlineCount: count });
+}
+
+async function emitCampusActivity(user,event,payload) {
+  const excluded=await connectionPolicy.blockedIds(prisma,user.id);
+  io.to('campus:'+user.campus.slug).except(excluded.map(id=>'user:'+id)).emit(event,payload);
+}
+async function mayUsePrivateRoom(user,roomId) {
+  const m=await prisma.match.findFirst({where:{roomId,status:'active',OR:[{userOneId:user.id},{userTwoId:user.id}]}});
+  return m && !await connectionPolicy.isBlocked(prisma,m.userOneId,m.userTwoId) ? m : null;
+}
+async function currentSocketAccount(user) {
+  const current=await prisma.user.findUnique({where:{id:user.id}});
+  return current && current.accountStatus==='active' && !accountUnavailable(current) && current.sessionVersion===user.sessionVersion ? current : null;
 }
 
 io.on('connection', socket => {
@@ -1721,7 +1772,7 @@ io.on('connection', socket => {
       const match = await prisma.match.findFirst({
         where: { roomId: room, OR: [{ userOneId: user.id }, { userTwoId: user.id }], status: MatchStatus.active }
       });
-      if (match) {
+      if (match && !await connectionPolicy.isBlocked(prisma,match.userOneId,match.userTwoId)) {
         socket.join(room);
         // Send last 50 active messages as history for the private room (filtering out expired 24h messages)
         const messages = await prisma.message.findMany({
@@ -1753,7 +1804,7 @@ io.on('connection', socket => {
       const match = await prisma.match.findFirst({
         where: { roomId, OR: [{ userOneId: user.id }, { userTwoId: user.id }], status: MatchStatus.active }
       });
-      if (match) {
+      if (match && !await connectionPolicy.isBlocked(prisma,match.userOneId,match.userTwoId)) {
         socket.to(roomId).emit('room:read', { roomId, readerId: user.id });
       }
     } catch (err) {
@@ -1762,14 +1813,13 @@ io.on('connection', socket => {
   });
 
   // Typing indicators
-  socket.on('typing:start', ({ roomId }) => {
-    const targetRoom = roomId || ('campus:' + user.campus.slug);
-    socket.to(targetRoom).emit('typing:start', { roomId: targetRoom, username: user.publicAlias, userId: user.id });
-  });
-
-  socket.on('typing:stop', ({ roomId }) => {
-    const targetRoom = roomId || ('campus:' + user.campus.slug);
-    socket.to(targetRoom).emit('typing:stop', { roomId: targetRoom, userId: user.id });
+  for(const event of ['typing:start','typing:stop']) socket.on(event, async ({roomId}={})=>{
+    try {
+      if(!await currentSocketAccount(user)) return;
+      const payload={roomId:roomId||('campus:'+user.campus.slug),username:user.publicAlias,userId:user.id};
+      if(roomId) { if(await mayUsePrivateRoom(user,roomId)) socket.to(roomId).emit(event,payload); }
+      else await emitCampusActivity(user,event,payload);
+    } catch { /* A typing signal can be dropped without changing message delivery. */ }
   });
 
   // Campus-wide broadcast message (persisted to Prisma)
@@ -1779,6 +1829,7 @@ io.on('connection', socket => {
     }
     if (!content?.trim()) return ack({ error: 'Message cannot be empty.' });
     try {
+      if(!await currentSocketAccount(user)) return ack({error:'Account unavailable.'});
       const room = await campusRoom(user);
       const cleaned = clean(content);
       let finalContent = cleaned;
@@ -1794,7 +1845,7 @@ io.on('connection', socket => {
       }
       const message = await prisma.message.create({ data: { roomId: room.id, senderId: user.id, senderAlias: user.publicAlias, content: finalContent, isFiltered: cleaned !== content.trim() } });
       const payload = { ...publicMessage(message), status: 'delivered' };
-      io.to('campus:' + user.campus.slug).emit('message:new', payload);
+      await emitCampusActivity(user,'message:new',payload);
       ack({ ok: true, message: payload });
     } catch { ack({ error: 'Campus chat is unavailable.' }); }
   });
@@ -1808,7 +1859,7 @@ io.on('connection', socket => {
     const match = await prisma.match.findFirst({
       where: { roomId, OR: [{ userOneId: user.id }, { userTwoId: user.id }], status: MatchStatus.active }
     });
-    if (!match) return ack({ error: 'Room unavailable.' });
+    if (!match || await connectionPolicy.isBlocked(prisma,match.userOneId,match.userTwoId) || !await currentSocketAccount(user)) return ack({ error: 'Room unavailable.' });
     const cleaned = clean(content);
     const expiresAt = match.disappearingMode ? new Date(Date.now() + 24 * 60 * 60 * 1000) : null;
     const message = await prisma.message.create({
@@ -1832,28 +1883,19 @@ io.on('connection', socket => {
   });
 
   // Reaction toggle on a message (broadcasts updated tallies to room)
-  socket.on('message:react', async ({ messageId, emoji, roomId }, ack = () => {}) => {
-    if (!messageId || !emoji) return ack({ error: 'Missing parameters.' });
-    if (!reactions.ALLOWED_EMOJIS.includes(emoji)) return ack({ error: 'Unsupported emoji reaction.' });
-
+  socket.on('message:react', async ({messageId,emoji}={},ack=()=>{})=>{
     try {
-      const result = await reactions.toggleReaction(messageId, emoji, user.id);
-      if (!result) return ack({ error: 'Could not process reaction.' });
-
-      const targetRoom = roomId || ('campus:' + user.campus.slug);
-      io.to(targetRoom).emit('message:reaction:update', {
-        messageId,
-        emoji,
-        userId: user.id,
-        userAlias: user.publicAlias,
-        action: result.action,
-        reactions: result.reactions
-      });
-      ack({ ok: true, ...result });
-    } catch (err) {
-      console.error('message:react error:', err);
-      ack({ error: 'Failed to toggle reaction.' });
-    }
+      if(!reactions.ALLOWED_EMOJIS.includes(emoji) || !await currentSocketAccount(user)) return ack({error:'Reaction unavailable.'});
+      const m=await prisma.message.findUnique({where:{id:messageId},include:{room:true}});
+      if(!m || m.isDeleted || m.room.campusId!==user.campusId || (m.expiresAt && m.expiresAt<=new Date()) || await connectionPolicy.isBlocked(prisma,user.id,m.senderId)) return ack({error:'Message unavailable.'});
+      if(m.room.kind==='match' && !await mayUsePrivateRoom(user,m.roomId)) return ack({error:'Message unavailable.'});
+      const result=await reactions.toggleReaction(messageId,emoji,user.id);
+      if(!result) return ack({error:'Reaction unavailable.'});
+      const payload={messageId,emoji,userId:user.id,userAlias:user.publicAlias,action:result.action,reactions:result.reactions};
+      if(m.room.kind==='campus') await emitCampusActivity(user,'message:reaction:update',payload);
+      else io.to(m.roomId).emit('message:reaction:update',payload);
+      ack({ok:true,...result});
+    } catch { ack({error:'Reaction unavailable.'}); }
   });
 
   // Live location update from a student (broadcast only if mutual session active)
@@ -1865,7 +1907,7 @@ io.on('connection', socket => {
       const match = await prisma.match.findFirst({
         where: { id: matchId, OR: [{ userOneId: user.id }, { userTwoId: user.id }], status: MatchStatus.active }
       });
-      if (!match) return;
+      if (!match || await connectionPolicy.isBlocked(prisma,match.userOneId,match.userTwoId)) return;
 
       const session = activeLocationSessions.get(match.id);
       if (!session || !session.active) return;
@@ -1903,7 +1945,7 @@ io.on('connection', socket => {
       const match = await prisma.match.findFirst({
         where: { id: matchId, OR: [{ userOneId: user.id }, { userTwoId: user.id }] }
       });
-      if (!match) return;
+      if (!match || await connectionPolicy.isBlocked(prisma,match.userOneId,match.userTwoId)) return;
 
       const session = activeLocationSessions.get(match.id);
       if (session) {
@@ -1967,8 +2009,9 @@ async function runEphemeralChatCleanup() {
 }
 
 // ── Static frontend ─────────────────────────────────────────────────────────
-app.use(express.static(path.join(__dirname, '..', 'dist')));
-app.get('*', (req, res) => res.sendFile(path.join(__dirname, '..', 'dist', 'index.html')));
+const staticDir = path.resolve(__dirname, '..', process.env.STATIC_DIR || 'dist');
+app.use(express.static(staticDir));
+app.get('*', (req, res) => res.sendFile(path.join(staticDir, 'index.html')));
 
 // Run ephemeral cleanup on startup and hourly
 setInterval(runEphemeralChatCleanup, 60 * 60 * 1000);
