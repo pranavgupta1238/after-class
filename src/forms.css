@@ -33,6 +33,38 @@ select:focus,
 
 select:disabled { cursor: not-allowed; opacity: .6; }
 
+/* Use one spacing rhythm instead of stacking form gaps and child margins. */
+.cx-dialog form {
+  gap: 18px;
+  margin-top: 18px;
+}
+.cx-dialog form > label,
+.cx-dialog form > fieldset {
+  margin: 0;
+}
+.cx-dialog form > fieldset > legend { margin-bottom: 8px; }
+.cx-dialog form > .cx-actions { margin-top: 4px; }
+
+.modal.cx-availability-dialog { padding: 24px; }
+.cx-availability-dialog .dialog-symbol {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  margin-bottom: 14px;
+}
+.cx-availability-dialog h2 { margin-bottom: 8px; }
+.cx-availability-dialog .cx-subtitle { margin-bottom: 0; }
+.cx-availability-dialog form { margin-top: 20px; }
+.cx-availability-dialog form > .wide { margin: 0; }
+.cx-availability-dialog .cx-duration span {
+  box-sizing: border-box;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+}
+
 @media (forced-colors: active) {
   :is(select, .modal select):not([multiple]):not([size]) {
     appearance: auto;
