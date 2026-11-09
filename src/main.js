@@ -784,10 +784,16 @@ function planLoadState() {
 function home() {
   const plans = selectPlans(state.requests);
   return layout(`
-    <section class="portal-heading"><div><h1>Home</h1></div><button class="primary" onclick="openComposer()">＋ New plan</button></section>
-    <section class="quick-plans" aria-label="Start a plan"><div><h2>What are you up for?</h2></div><div class="quick-plan-options">${ACTIVITIES.slice(1).map(a=>`<button onclick="startPlanIdea('${a.id}')"><span aria-hidden="true">${uiIcon(a.id)}</span>${a.label}</button>`).join('')}</div></section>
+    <section class="home-feature">
+      <div class="home-feature-copy"><h1>Good company.<br><em>After class.</em></h1><p>Meet someone over a plan you’d make anyway.</p><button class="primary" onclick="go('discover')">Explore plans</button></div>
+      <div class="home-feature-art" aria-hidden="true">
+        <div class="art-orbit"></div><div class="art-postcard"><span>THE USUAL SPOT</span><svg viewBox="0 0 300 220" fill="none"><ellipse cx="150" cy="178" rx="118" ry="24" fill="#b46d4620"/><path d="m56 144 89-41 103 49-91 44Z" fill="#ede1c7"/><path d="m65 143 81-35 93 43-83 38Z" stroke="#b49b79"/><ellipse cx="116" cy="127" rx="47" ry="20" fill="#fcf6e7"/><path d="M83 85h65v37c0 31-65 31-65 0Z" fill="#fcf6e7" stroke="#cbab88" stroke-width="2"/><path d="M148 93c37-8 35 37 0 30" stroke="#fcf6e7" stroke-width="11"/><ellipse cx="115" cy="86" rx="32" ry="13" fill="#dfc29e"/><ellipse cx="115" cy="88" rx="26" ry="9" fill="#704531"/><path d="M105 63c-15-15 12-19 0-33M121 65c-13-16 14-20 2-34" stroke="#fff7e5" stroke-width="3" stroke-linecap="round"/><ellipse cx="203" cy="162" rx="41" ry="17" fill="#527569"/><path d="M175 127h54v30c0 25-54 25-54 0Z" fill="#234b3e"/><path d="M229 133c28-5 29 28 0 24" stroke="#234b3e" stroke-width="9"/><ellipse cx="202" cy="127" rx="27" ry="11" fill="#86a08b"/><ellipse cx="202" cy="129" rx="22" ry="7" fill="#523c2c"/><path d="M199 106c-11-12 10-17 0-29" stroke="#fff7e5" stroke-width="3" stroke-linecap="round"/></svg><strong>Room for one more.</strong></div>
+        <div class="art-ticket"><span>AFTERCLASS</span><strong>Make it a<br>good afternoon.</strong><i>✦</i></div>
+      </div>
+    </section>
+    <section class="quick-plans home-activities" aria-label="Start a plan"><div class="quick-plan-options">${ACTIVITIES.slice(1).map(a=>`<button class="activity-tile activity-tile-${a.id}" onclick="startPlanIdea('${a.id}')"><span aria-hidden="true">${uiIcon(a.id)}</span>${a.label}</button>`).join('')}</div></section>
     <section class="portal-section-head"><h2>Upcoming plans</h2><button class="link" onclick="go('discover')">View all</button></section>
-    <div class="request-grid campus-plan-grid">${planLoadState() || (plans.length ? plans.slice(0,3).map(card).join('') : `<div class="campus-empty"><span class="campus-empty-icon" aria-hidden="true">＋</span><h3>No plans yet</h3><p>Invite someone to join yours.</p><button class="primary" onclick="openComposer()">Create a plan</button></div>`)}</div>
+    <div class="request-grid campus-plan-grid">${planLoadState() || (plans.length ? plans.slice(0,3).map(card).join('') : `<div class="home-empty"><div><h3>The afternoon is open.</h3><p>No upcoming plans yet. Start with yours.</p></div><button class="primary" onclick="openComposer()">Create a plan</button></div>`)}</div>
     <button class="room-shortcut" onclick="go('chat')"><span class="room-shortcut-icon">${icons.chat}</span><span><strong>Campus chat</strong><small>Join the conversation</small></span></button>
   `);
 }
