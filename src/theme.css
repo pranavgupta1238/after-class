@@ -1,0 +1,73 @@
+/* Neutral surfaces; blue is reserved for interaction, not full-screen decoration. */
+:root { --paper:#f7f7f9;--surface:#fff;--ink:#22252d;--muted:#606571;--line:#e2e3e9;--green:#3455c5;--forest:#3455c5;--accent:#3455c5; }
+body { background:var(--paper);color:var(--ink); }
+.experience-sidebar { background:#fff;color:var(--ink);border-right:1px solid var(--line); }
+.experience-sidebar .brand,.mobile-wordmark { color:#22252d; }
+.experience-sidebar .brand i,.brand-period,.mobile-wordmark>span { color:var(--accent); }
+.experience-sidebar .campus { border-color:var(--line);margin-top:28px;padding-bottom:20px; }
+.experience-sidebar .campus b { color:var(--muted);font-size:13px;margin-top:0; }
+.experience-sidebar nav button { color:#606571; }
+.experience-sidebar nav button.active { background:#edf0fc;color:#2949b4;box-shadow:none; }
+.experience-sidebar nav button:hover { background:#f2f3f7;color:#22252d; }
+.experience-sidebar .sidebar-bottom { border-color:var(--line);color:var(--ink); }
+.sidebar-profile-copy strong { color:var(--ink);font-size:13px; }
+.sidebar-profile-copy small { color:var(--muted);font-size:12px; }
+.toolbar-location,.toolbar-safety,.toolbar-symbol { color:var(--muted); }
+.toolbar-symbol { display:none; }
+.toolbar-create { color:var(--ink);background:#fff;border-color:var(--line); }
+.primary,.composer .send-btn { background:var(--accent);color:#fff; }
+.primary:hover { background:#2845a7;box-shadow:0 4px 12px #3455c51a; }
+.quick-plans,.account-summary { background:#f0f1f5; }
+.quick-plan-options button { background:#fff;border-color:var(--line); }
+.quick-plan-options button:hover { border-color:#a3add2; }
+.room-shortcut-icon,.account-status { background:#edf0fc;color:#354c99; }
+.account-status { font-size:13px; }
+.portal-heading { margin:28px 0; }
+.portal-heading h1 { margin:0; }
+.portal-section-head h2,.quick-plans h2 { font-size:18px; }
+.preference-row,.preference-row small,.account-summary p { font-size:13px; }
+.activity-filters button { color:var(--muted);background:#fff;border-color:var(--line); }
+.activity-filters button.selected { color:#fff;background:var(--accent);border-color:var(--accent); }
+.discovery-tabs button.selected { color:var(--accent);border-color:var(--accent); }
+.plan-category,.plan-time,.plan-host-row,.plan-location { color:var(--muted);font-size:13px; }
+.campus-plan-card footer button { background:var(--accent);color:#fff; }
+.plan-bookmark-btn.saved { background:#edf0fc;color:var(--accent); }
+.admin-view-tabs { background:#f0f1f5; }
+.admin-view-tab,.admin-filter-pill { color:var(--muted); }
+.admin-filter-pill.active { background:#edf0fc;color:#2949b4;border-color:#b7c3eb; }
+.chat-main .notice { background:#f3f4f8;color:#606571; }
+.chat-input-pill,.quick-pick-chip { background:#f7f7f9;border-color:var(--line);color:var(--ink); }
+.quick-pick-chip.selected { background:#edf0fc;color:#2949b4;border-color:#a3b2e2; }
+.chat-panel .chat-title h2 { font-family:'DM Sans',sans-serif; }
+.emoji-category-chip.active { background:var(--accent); }
+.ac-signal { background:#edf0f7;color:#455785; }
+.auth-page-wrapper { background:#f7f7f9; }
+.editorial-welcome h1 { color:#22252d; }
+.editorial-welcome h1 em { color:#5266a7; }
+.editorial-welcome p { color:#606571; }
+.auth-page-wrapper .auth-form-side { background:#242936;border-color:#353c4b; }
+.auth-page-wrapper .auth-form-title,.auth-membership-details h3 { color:#fff; }
+.auth-page-wrapper .auth-form-subtitle,.auth-membership-details p,.auth-page-wrapper .auth-security-notice { color:#c2c7d2; }
+.auth-membership-details svg { color:#bec9ee; }
+.auth-page-wrapper .auth-submit-btn { background:#dbe3ff;color:#263b76; }
+.auth-page-wrapper .auth-submit-btn:hover { background:#edf0ff; }
+.auth-page-wrapper .auth-alt-action a { color:#dbe3ff; }
+.auth-page-wrapper .auth-form-group>label { color:#c2c7d2;font-size:12px;letter-spacing:0; }
+.auth-page-wrapper .auth-trust-pill { color:#c2c7d2;font-size:11px; }
+.welcome-note { background:#e4e8f5;color:#35446e; }
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible { outline:2px solid #3455c5;outline-offset:3px; }
+@media(max-width:800px) {
+ .experience-sidebar { background:#fff;border-top:1px solid var(--line);border-right:0; }
+ .experience-sidebar nav button { color:#606571; }
+ .experience-sidebar nav button.active { color:#2949b4;background:#edf0fc; }
+ .toolbar-create { background:#edf0fc; }
+}
+.auth-page-wrapper .auth-glass-card { background:#242936;border-color:#353c4b;box-shadow:0 18px 45px #24293612; }
+.auth-page-wrapper .auth-card-title { color:#fff; }
+.auth-page-wrapper .auth-card-sub,.auth-page-wrapper .auth-google-hint,.auth-page-wrapper .auth-divider-or,.auth-page-wrapper .auth-alt-action { color:#c2c7d2;font-size:13px; }
+.auth-page-wrapper .auth-primary-btn { background:#dbe3ff;border-color:#dbe3ff;color:#263b76; }
+.auth-page-wrapper .auth-primary-btn:hover { background:#edf0ff; }
+.auth-page-wrapper .auth-google-btn { color:#f0f2f8; }
+.auth-page-wrapper .auth-form-eyebrow-tag { color:#c2c7d2;font-size:12px;letter-spacing:0; }
+.experience-sidebar .sidebar-bottom small,.campus-empty p { color:#606571;font-size:13px; }
+.campus-empty-icon { color:#606571; }

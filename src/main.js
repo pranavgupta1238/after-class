@@ -2,6 +2,7 @@ import './style.css';
 import './campus.css';
 import './experience.css';
 import './portal.css';
+import './theme.css';
 import { ACTIVITIES, activityFor, selectPlans, planTime } from './discovery.mjs';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -444,7 +445,7 @@ window.toggleMessageReaction = (msgId, emoji) => {
     toast('Verify your college email to react to campus chat.');
     return;
   }
-  
+
   // Optimistic UI feedback
   const row = document.querySelector(`.message-reactions-row[data-reactions-for="${msgId}"]`);
   if (row) {
@@ -564,7 +565,7 @@ function renderChatMediaTray(anchorEl) {
 
 function getMediaTrayFullContent() {
   const q = mediaTraySearchQuery.trim().toLowerCase();
-  
+
   let stickers = CAMPUS_STICKERS;
   let emojis = ALL_UNICODE_EMOJIS;
 
@@ -758,13 +759,13 @@ function layout(content) {
       <a class="skip-content" href="#main-content">Skip to content</a>
       <aside class="experience-sidebar">
         <a class="brand" href="/" onclick="event.preventDefault();go('home')"><i>✦</i> afterclass<span class="brand-period">.</span></a>
-        <div class="campus"><span>CAMPUS</span><b>${escapeHtml(campusName)}</b></div>
+        <div class="campus"><b>${escapeHtml(campusName)}</b></div>
         <nav aria-label="Main navigation">${nav.map(([key,label,mobile])=>`<button type="button" data-nav="${key}" class="${state.view===key?'active':''}" ${state.view===key?'aria-current="page"':''} aria-label="${label}" onclick="go('${key}')"><span class="nav-icon" aria-hidden="true">${icons[key]||'◈'}</span><span class="nav-label">${label}</span><span class="nav-mobile-label">${mobile}</span>${key==='inbox'&&inboxCount?`<em aria-label="${inboxCount} incoming interests">${inboxCount}</em>`:''}</button>`).join('')}</nav>
 
         <button class="sidebar-bottom" onclick="${me?'openAvatarPreview()':"go('auth')"}" aria-label="${me?'Open your profile':'Join your campus'}">${avatar(me?.avatarConfig||username,false,Boolean(me?.isVerified))}<span class="sidebar-profile-copy"><strong>${escapeHtml(username)}</strong><small>${me?(me.isVerified?'Verified student': 'Student profile'):'Sign in to get started'}</small></span></button>
       </aside>
       <main id="main-content" tabindex="-1" class="${state.view==='chat'?'chat-main':''}">
-        <div class="experience-toolbar"><div class="toolbar-location"><span class="toolbar-symbol" aria-hidden="true">✳</span><span>${currentLabel}<small>${escapeHtml(campusName)}</small></span></div><a class="mobile-wordmark" href="/" onclick="event.preventDefault();go('home')">✦ afterclass<span>.</span></a><div class="toolbar-actions"><button class="toolbar-safety" aria-label="Trust and safety" onclick="go('safety')">${icons.safety}</button><button class="toolbar-create" aria-label="Create a plan" onclick="openComposer()"><span aria-hidden="true">＋</span><span class="toolbar-create-label">New plan</span></button><button class="toolbar-profile" aria-label="Open your profile" onclick="${me?'openAvatarPreview()':"go('auth')"}">${avatar(me?.avatarConfig||username,true,Boolean(me?.isVerified))}</button></div></div>
+        <div class="experience-toolbar"><div class="toolbar-location"><span class="toolbar-symbol" aria-hidden="true">✳</span><span>${currentLabel}</span></div><a class="mobile-wordmark" href="/" onclick="event.preventDefault();go('home')">✦ afterclass<span>.</span></a><div class="toolbar-actions"><button class="toolbar-safety" aria-label="Trust and safety" onclick="go('safety')">${icons.safety}</button><button class="toolbar-create" aria-label="Create a plan" onclick="openComposer()"><span aria-hidden="true">＋</span><span class="toolbar-create-label">New plan</span></button><button class="toolbar-profile" aria-label="Open your profile" onclick="${me?'openAvatarPreview()':"go('auth')"}">${avatar(me?.avatarConfig||username,true,Boolean(me?.isVerified))}</button></div></div>
         ${renderWarnedStudentBanner()}${content}
       </main>
     </div><div id="toast" role="status" aria-live="polite" class="toast ${state.toast?'show':''}">${escapeHtml(state.toast)}</div>`;
@@ -783,8 +784,8 @@ function planLoadState() {
 function home() {
   const plans = selectPlans(state.requests);
   return layout(`
-    <section class="portal-heading"><div><span class="eyebrow">${escapeHtml(state.me?.university || 'NIIT University')}</span><h1>After hours.</h1><p>See what’s happening on campus.</p></div><button class="primary" onclick="openComposer()">＋ New plan</button></section>
-    <section class="quick-plans" aria-label="Start a plan"><div><h2>What are you up for?</h2><p>Start with something you enjoy.</p></div><div class="quick-plan-options">${ACTIVITIES.slice(1).map(a=>`<button onclick="startPlanIdea('${a.id}')"><span aria-hidden="true">${uiIcon(a.id)}</span>${a.label}</button>`).join('')}</div></section>
+    <section class="portal-heading"><div><h1>Home</h1></div><button class="primary" onclick="openComposer()">＋ New plan</button></section>
+    <section class="quick-plans" aria-label="Start a plan"><div><h2>What are you up for?</h2></div><div class="quick-plan-options">${ACTIVITIES.slice(1).map(a=>`<button onclick="startPlanIdea('${a.id}')"><span aria-hidden="true">${uiIcon(a.id)}</span>${a.label}</button>`).join('')}</div></section>
     <section class="portal-section-head"><h2>Upcoming plans</h2><button class="link" onclick="go('discover')">View all</button></section>
     <div class="request-grid campus-plan-grid">${planLoadState() || (plans.length ? plans.slice(0,3).map(card).join('') : `<div class="campus-empty"><span class="campus-empty-icon" aria-hidden="true">＋</span><h3>No plans yet</h3><p>Invite someone to join yours.</p><button class="primary" onclick="openComposer()">Create a plan</button></div>`)}</div>
     <button class="room-shortcut" onclick="go('chat')"><span class="room-shortcut-icon">${icons.chat}</span><span><strong>Campus chat</strong><small>Join the conversation</small></span></button>
@@ -802,7 +803,7 @@ function card(r) {
     <time class="plan-time" datetime="${escapeHtml(r.scheduledAt)}">${planTime(r.scheduledAt)}</time>
     <h3>${escapeHtml(r.activity)}</h3><p class="plan-location">⌖ ${escapeHtml(r.location || 'Campus')}</p>
     <div class="plan-host-row">${avatar(r.host?.username || 'Student')}<span>Hosted by <b>${escapeHtml(r.host?.username || 'Student')}</b></span></div>
-    <footer><span>${isMine ? 'Your invitation' : 'Start with a shared plan'}</span>${isMine ? `<button class="campus-text-action" onclick="go('inbox')">Manage</button>` : hasApplied ? '<button class="applied-btn" disabled>Interest sent ✓</button>' : `<button data-join-plan="${id}">I’m interested</button>`}</footer>
+    <footer>${isMine ? '<span>Your plan</span>' : ''}${isMine ? `<button class="campus-text-action" onclick="go('inbox')">Manage</button>` : hasApplied ? '<button class="applied-btn" disabled>Interest sent ✓</button>' : `<button data-join-plan="${id}">I’m interested</button>`}</footer>
   </article>`;
 }
 
@@ -822,7 +823,7 @@ function discoveryCount() {
 
 function discover() {
   const filter = state.discoverFilter || 'all';
-  return layout(`<section class="portal-heading"><div><h1>Discover</h1><p>Plans worth stepping out for.</p></div><button class="primary" onclick="openComposer()">＋ Create a plan</button></section>
+  return layout(`<section class="portal-heading"><div><h1>Discover</h1></div><button class="primary" onclick="openComposer()">＋ Create a plan</button></section>
     <section class="discovery-tools" aria-label="Filter campus plans"><div class="discovery-search-row"><label class="discovery-search"><span aria-hidden="true">⌕</span><input type="search" id="plan-search" value="${escapeHtml(discovery.query)}" placeholder="Try chai, library, badminton…" aria-label="Search activities or locations" oninput="searchCampusPlans(this.value)"></label><label class="discovery-select">When<select onchange="setPlanOption('when',this.value)">${[['any','Any time'],['today','Today'],['tomorrow','Tomorrow'],['week','Next 7 days']].map(([v,l])=>`<option value="${v}" ${discovery.when===v?'selected':''}>${l}</option>`).join('')}</select></label></div>
     <div class="activity-filters" role="group" aria-label="Activity type">${ACTIVITIES.map(a=>`<button aria-pressed="${discovery.category===a.id}" class="${discovery.category===a.id?'selected':''}" onclick="setPlanOption('category','${a.id}')">${uiIcon(a.id)} ${a.label}</button>`).join('')}</div></section>
     <div class="discovery-results-bar"><div class="discovery-tabs"><button class="${filter==='all'?'selected':''}" aria-pressed="${filter==='all'}" onclick="setDiscoverFilter('all')">All plans</button><button class="${filter==='saved'?'selected':''}" aria-pressed="${filter==='saved'}" onclick="setDiscoverFilter('saved')">Saved</button></div><label class="discovery-sort">Sort by<select aria-label="Sort plans" onchange="setPlanOption('sort',this.value)"><option value="soonest" ${discovery.sort==='soonest'?'selected':''}>Happening soonest</option><option value="newest" ${discovery.sort==='newest'?'selected':''}>Recently posted</option></select></label></div>
@@ -856,9 +857,9 @@ function chat() {
       <div class="chat-panel">
         <div class="chat-title">
           <div>
-            <span class="eyebrow">CAMPUS SPACE</span>
+
             <h2>${state.me?.university || 'NIIT University'} chat <button type="button" class="campus-live-badge clickable ${state.campusOnlineCount == null ? 'presence-unavailable' : ''}" onclick="openCampusMembersModal()" title="View campus members"><i class="live-pulse-dot"></i> <b id="campus-online-count">${online}</b> online</button></h2>
-            <p>Say hi. Keep it kind. Be human.</p>
+
           </div>
           <div class="chat-title-actions">
             <button type="button" class="chat-members-action-btn" onclick="openCampusMembersModal()" title="View who all joined this group">
@@ -916,9 +917,9 @@ function inbox() {
   const myPlansCount = state.myPlans?.length || 0;
   return layout(`
     <section class="page-title compact">
-      <span class="eyebrow">YOUR CONNECTIONS & PLANS</span>
+
       <h1>Inbox</h1>
-      <p>Conversations and invitations.</p>
+
     </section>
 
     <div class="inbox-tabs">
@@ -1024,7 +1025,7 @@ function inbox() {
 }
 
 function safety() {
-  return layout(`<section class="portal-heading"><div><h1>Trust & safety</h1><p>Stay in control of your experience.</p></div><button class="secondary" onclick="openGuidelines()">Community guidelines</button></section>
+  return layout(`<section class="portal-heading"><div><h1>Trust & safety</h1></div><button class="secondary" onclick="openGuidelines()">Community guidelines</button></section>
     <div class="safety-grid"><article><i>${icons.settings}</i><h3>Your public identity</h3><p>Other students see your alias. Your university email stays private.</p></article><article><i>${icons.inbox}</i><h3>Sharing is mutual</h3><p>Reveal your identity in a private conversation when you both agree.</p></article><article><i>${icons.safety}</i><h3>Report a concern</h3><p>Open a message’s actions and choose Report. Moderators review the context.</p></article></div>
     <section class="preference-group safety-details"><h2>Good to know</h2><details><summary>Meeting in person</summary><p>Choose a public campus location, let a friend know your plans, and leave whenever you feel uncomfortable.</p></details><details><summary>What happens after a report?</summary><p>Authorized moderators review the reported message and surrounding conversation. They may remove content, issue a warning, or restrict an account.</p></details><details><summary>Community expectations</summary><p>Respect consent and privacy. Harassment, hate speech, bullying, and sharing someone’s identity without permission are not welcome.</p></details></section>`);
 }
@@ -1204,7 +1205,7 @@ function adminPortal() {
     <div class="admin-portal-wrapper">
       <section class="admin-header-card">
         <div class="admin-header-left">
-          <span class="admin-eyebrow-pill">STAFF WORKSPACE</span>
+
           <h1 class="admin-title">Moderation</h1>
           <div class="admin-meta-row">
             <span>Signed in as <b>${escapeHtml(me.email || me.username)}</b></span>
@@ -2361,7 +2362,7 @@ function settings() {
   const soundOn = !isSoundMuted();
   const device = getDeviceDescription();
   const row = (title, description, control) => `<div class="preference-row"><div><strong>${title}</strong><small>${description}</small></div>${control}</div>`;
-  return layout(`<section class="portal-heading"><div><h1>Settings</h1><p>Your account, your preferences.</p></div></section>
+  return layout(`<section class="portal-heading"><div><h1>Settings</h1></div></section>
     <div class="account-layout"><div class="account-summary">${avatar(me?.avatarConfig || me?.username || 'Guest',false,Boolean(me?.isVerified))}<h2>${escapeHtml(me?.username || 'Guest')}</h2><p>${escapeHtml(me?.university || 'NIIT University')}</p><span class="account-status">${me?.isVerified ? 'Verified student' : me ? 'Student account' : 'Not signed in'}</span><button class="secondary" onclick="${me?'openAvatarPreview()':'openAuth()'}">${me?'View profile':'Sign in'}</button>${me?.isAdmin?`<button class="account-admin" onclick="go('admin')">Moderation workspace</button>`:''}</div>
     <div class="account-sections"><section class="preference-group"><h2>Profile & privacy</h2>
       ${row('Campus alias','Your public name on Afterclass.',`<span>${escapeHtml(me?.username || 'Guest')}</span>`)}
@@ -2427,22 +2428,22 @@ function authPage() {
         <div class="auth-right-container">
           <div class="auth-glass-card">
             ${step === 'welcome' ? `
-              <span class="auth-form-eyebrow-tag">JOIN AFTERCLASS</span>
+
               <h2 class="auth-card-title">Your campus.<br>A wider circle.</h2>
               <p class="auth-card-sub">Meet students outside your usual group. Sign in with your university account to get started.</p>
 
               <ul class="auth-membership-details" aria-label="What you can do on Afterclass">
                 <li>
                   <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H5l-3 3v-9.5A7.5 7.5 0 0 1 9.5 5h3a7.5 7.5 0 0 1 7.5 6.5Z"/><path d="M7 10h8M7 14h5"/></svg>
-                  <div><h3>Campus conversations</h3><p>Join the chat under an alias. Your real name stays off your public profile.</p></div>
+                  <div><h3>Campus conversations</h3></div>
                 </li>
                 <li>
                   <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="16" rx="3"/><path d="M8 3v4m8-4v4M4 11h16m-10 5h4"/></svg>
-                  <div><h3>Plans beyond the group chat</h3><p>Find company for coffee, a study session, or a walk around campus.</p></div>
+                  <div><h3>Plans beyond the group chat</h3></div>
                 </li>
                 <li>
                   <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
-                  <div><h3>An introduction you both choose</h3><p>Reveal your identity in a private chat only when you both agree.</p></div>
+                  <div><h3>An introduction you both choose</h3></div>
                 </li>
               </ul>
 
@@ -2582,7 +2583,7 @@ function renderAvatarPreviewModal() {
 
   document.body.insertAdjacentHTML('beforeend', modal(`
     <div class="avatar-showcase-modal">
-      <span class="eyebrow">STUDENT PROFILE</span>
+
       <h2>Your Anonymous Identity</h2>
 
       <div class="profile-passport-box" style="margin: 20px 0 14px; display: flex; justify-content: center;">
@@ -2677,9 +2678,9 @@ function renderAvatarStudioModal() {
 
   document.body.insertAdjacentHTML('beforeend', modal(`
     <div class="avatar-studio-container">
-      <span class="eyebrow">AVATAR STUDIO</span>
+
       <h2>Customize Your Character</h2>
-      
+
       <div class="showcase-stage-card ${isDark ? 'dark-stage' : ''}">
         <div class="stage-controls" style="width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
           <button class="stage-toggle-btn ${isDark ? 'active' : ''}" onclick="toggleAvatarStudioDarkMode()" title="Switch Light/Dark Spotlight Mode">
@@ -2826,7 +2827,7 @@ function openComposer() {
 
   document.body.insertAdjacentHTML('beforeend', modal(`
     <div class="composer-modal-content">
-      <span class="eyebrow">MAKE A PLAN</span>
+
       <h2>Create a plan</h2>
       <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">Choose an activity, a public spot, and a time.</p>
 
@@ -2924,7 +2925,7 @@ window.selectQuickTime = type => {
 
 function openGuidelines() {
   document.body.insertAdjacentHTML('beforeend', modal(`
-    <span class="eyebrow">COMMUNITY & SAFETY</span>
+
     <h2>Guidelines for Campus</h2>
     <div style="font-size: 13px; line-height: 1.6; color: var(--ink); margin: 15px 0;">
       <p><b>1. Mutual Respect:</b> Harassment, threats, hate speech, or bullying will result in permanent account removal.</p>
@@ -3017,7 +3018,7 @@ async function openCampusMembersModal() {
   const modalHtml = modal(`
     <div class="campus-members-modal-wrapper">
       <div class="campus-members-header">
-        <span class="eyebrow">CAMPUS GROUP MEMBERS</span>
+
         <h2 style="margin: 4px 0 2px; font-size: 22px; display: flex; align-items: center; gap: 8px;">
           <span>👥</span> <span id="members-modal-title">Campus Members</span>
         </h2>
