@@ -274,3 +274,5 @@ button:disabled { cursor: default; }
 .chat-access-state h1,.chat-access-state h2 { font: 500 clamp(26px,3vw,38px)/1.2 'Playfair Display',Georgia,serif; margin: 0 0 15px; letter-spacing: -.8px; }
 .chat-access-state p { color: #718069; font-size: 13px; line-height: 1.8; max-width: 350px; margin: 0 0 24px; }
 .chat-load-error h2 { font-size: 28px; }
+.experience-shell .campus-live-badge.presence-unavailable { color: #828a7b; border-color: #e1e5dc; background: #f6f7f2; }
+.experience-shell .presence-unavailable .live-pulse-dot { background: #b6beb0; box-shadow: none; }

@@ -874,7 +874,7 @@ function chat() {
         <div class="chat-title">
           <div>
             <span class="eyebrow">CAMPUS SPACE</span>
-            <h2>${state.me?.university || 'NIIT University'} chat <button type="button" class="campus-live-badge clickable" onclick="openCampusMembersModal()" title="View campus members"><i class="live-pulse-dot"></i> <b id="campus-online-count">${online}</b> online</button></h2>
+            <h2>${state.me?.university || 'NIIT University'} chat <button type="button" class="campus-live-badge clickable ${state.campusOnlineCount == null ? 'presence-unavailable' : ''}" onclick="openCampusMembersModal()" title="View campus members"><i class="live-pulse-dot"></i> <b id="campus-online-count">${online}</b> online</button></h2>
             <p>Say hi. Keep it kind. Be human.</p>
           </div>
           <div class="chat-title-actions">
@@ -4986,25 +4986,24 @@ window.retryCampusChat = () => {
   render();
 };
 
+function setCampusPresence(count) {
+  state.campusOnlineCount = Number.isInteger(count) && count >= 0 ? count : undefined;
+  const el = document.querySelector('#campus-online-count');
+  if (el) {
+    el.textContent = state.campusOnlineCount ?? '—';
+    el.closest('.campus-live-badge')?.classList.toggle('presence-unavailable', state.campusOnlineCount == null);
+  }
+}
+
 function initSocket() {
   if (socket || !state.me) return;
   const socketUrl = import.meta.env.VITE_API_URL ? new URL(import.meta.env.VITE_API_URL).origin : location.origin;
   socket = io(socketUrl, { withCredentials: true });
 
-  socket.on('connect', () => {
-    if (state.me?.campusId) {
-      socket.emit('room:join', `campus:${state.me.campusId}`);
-    }
-    if (state.me?.id) {
-      socket.emit('room:join', `user:${state.me.id}`);
-    }
-  });
-
-  socket.on('campus:presence', ({ onlineCount }) => {
-    state.campusOnlineCount = onlineCount;
-    const el = document.querySelector('#campus-online-count');
-    if (el) el.textContent = onlineCount;
-  });
+  // The server joins the authenticated user's own campus and account rooms.
+  socket.on('disconnect', () => setCampusPresence(null));
+  socket.on('connect_error', () => setCampusPresence(null));
+  socket.on('campus:presence', ({ onlineCount }) => setCampusPresence(onlineCount));
 
   socket.on('message:new', message => {
     if (state.view === 'chat') {

@@ -25,6 +25,7 @@ const OTP_PEPPER = process.env.OTP_PEPPER || SECRET;
 const prisma = new PrismaClient();
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const reactions = require('./reactions');
+const { getCampusOnlineUserIds, canJoinIdentityRoom } = require('./presence');
 
 const names = {
   adjectives: ['Amber','Brisk','Clever','Daring','Gentle','Mossy','Quiet','Sunny','Velvet','Witty','Bright','Kind','Swift','Calm','Happy','Cosmic'],
@@ -813,9 +814,9 @@ app.get('/api/campus/members', auth, async (req, res) => {
       orderBy: { lastActiveAt: 'desc' }
     });
 
-    const roomSockets = io.sockets.adapter.rooms;
+    const onlineUsers = getCampusOnlineUserIds(io, req.user.campus?.slug);
     const members = dbMembers.map(m => {
-      const isOnline = Boolean(roomSockets.get('user:' + m.id)?.size);
+      const isOnline = onlineUsers.has(m.id);
       return {
         id: m.id,
         username: m.publicAlias,
@@ -838,13 +839,12 @@ app.get('/api/campus/members', auth, async (req, res) => {
       return new Date(b.lastActiveAt || 0) - new Date(a.lastActiveAt || 0);
     });
 
-    const presenceCount = getCampusPresenceCount(req.user.campus?.slug);
     const activeCount = members.filter(m => m.isOnline).length;
 
     res.json({
       campusName: req.user.campus?.name || 'Campus',
       totalCount: members.length,
-      onlineCount: Math.max(presenceCount, activeCount),
+      onlineCount: activeCount,
       activeOnlineMembers: activeCount,
       members
     });
@@ -1797,11 +1797,7 @@ io.use(async (socket, next) => {
 });
 
 function getCampusPresenceCount(campusSlug) {
-  const roomName = 'campus:' + campusSlug;
-  const socketCount = io.sockets.adapter.rooms.get(roomName)?.size || 0;
-  const hour = new Date().getHours();
-  const baseFloor = (hour >= 18 && hour <= 24) ? 22 : (hour >= 12 && hour < 18) ? 17 : (hour >= 8 && hour < 12) ? 14 : 9;
-  return Math.max(socketCount, baseFloor + (socketCount > 1 ? socketCount - 1 : 0));
+  return getCampusOnlineUserIds(io, campusSlug).size;
 }
 
 function broadcastCampusPresence(campusSlug) {
@@ -1824,7 +1820,7 @@ io.on('connection', socket => {
   socket.on('room:join', async room => {
     if (!room || typeof room !== 'string') return;
     if (room.startsWith('campus:') || room.startsWith('user:')) {
-      socket.join(room);
+      if (canJoinIdentityRoom(user, room)) socket.join(room);
       return;
     }
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(room);
