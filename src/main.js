@@ -928,12 +928,20 @@ function chat() {
         </div>
         <div class="notice">✦ You’re chatting as <b>${username}</b>. Your identity stays private.</div>
         <div class="messages" id="chat-messages">
-          ${state.messages.length > 0 ? state.messages.map(renderCampusMessageHtml).join('') : `
-            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:240px;color:var(--muted);gap:10px;">
-              <span class="auth-loading-spinner" style="display:inline-block;width:22px;height:22px;border:2.5px solid rgba(0,0,0,0.08);border-top-color:var(--forest);border-radius:50%;animation:spin 0.8s linear infinite;"></span>
-              <span style="font-size:13px;font-family:'DM Sans';">Loading campus chat...</span>
-            </div>
-          `}
+          ${state.messages.length > 0 ? state.messages.map(renderCampusMessageHtml).join('') : (
+            !chatInitialized ? `
+              <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:240px;color:var(--muted);gap:10px;">
+                <span class="auth-loading-spinner" style="display:inline-block;width:22px;height:22px;border:2.5px solid rgba(0,0,0,0.08);border-top-color:var(--forest);border-radius:50%;animation:spin 0.8s linear infinite;"></span>
+                <span style="font-size:13px;font-family:'DM Sans';">Loading campus chat...</span>
+              </div>
+            ` : `
+              <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:240px;color:var(--muted);gap:8px;text-align:center;padding:20px;">
+                <div style="width:46px;height:46px;border-radius:50%;background:#eef4ec;color:#244d42;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:2px;">💬</div>
+                <div style="font:600 16px 'Playfair Display';color:var(--ink);">Start the conversation</div>
+                <div style="font-size:12.5px;color:var(--muted);max-width:280px;line-height:1.45;">No recent messages in the last 7 days. Say hello to campus below — your identity stays completely private!</div>
+              </div>
+            `
+          )}
         </div>
         <div id="campus-typing-indicator" class="typing-indicator"></div>
         <div id="reply-preview-container"></div>
