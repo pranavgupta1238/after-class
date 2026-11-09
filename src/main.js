@@ -8,6 +8,8 @@ import './workspace.css';
 import './cards.css';
 import './messaging.css';
 import './forms.css';
+import './emoji-moments.css';
+import { emojiMood, playEmojiMoment } from './emoji-moments.mjs';
 import { createAdminLoader } from './admin-loader.mjs';
 import { ACTIVITIES, activityFor, selectPlans, planTime } from './discovery.mjs';
 import 'leaflet/dist/leaflet.css';
@@ -408,6 +410,18 @@ function parseMessageContent(raw) {
   return { text: raw, replyTo: null };
 }
 
+function formatChatBody(text) {
+  const content = formatMessageContent(text);
+  return emojiMood(text) ? `<span class="emoji-message-content">${content}</span>` : content;
+}
+
+function animateLiveEmoji(container, message) {
+  const { text } = parseMessageContent(message.content);
+  const element = container.lastElementChild?.querySelector('.emoji-message-content');
+  // Let the newly appended message's scroll position settle first.
+  requestAnimationFrame(() => requestAnimationFrame(() => playEmojiMoment(element, { id: message.id, text, isSystem: message.isSystem })));
+}
+
 const CAMPUS_REACTION_EMOJIS = ['❤️', '🔥', '👍', '😂', '👀', '☕', '❄️', '💯'];
 
 function renderMessageReactionsHtml(reactions = [], msgId) {
@@ -511,7 +525,7 @@ function renderCampusMessageHtml(m) {
     <div class="message ${isMine ? 'is-mine' : ''}" data-msg-id="${id}" data-sender="${escapeHtml(name)}" data-text="${escapeHtml(text)}">
       ${avatar(name)}<div class="message-content-col"><div class="message-meta"><b>${!isMine&&m.senderId?`<button class="link" onclick="cx.viewProfile('${escapeQuotes(m.senderId)}')">${escapeHtml(name)}</button>`:escapeHtml(isMine ? 'You' : name)}</b><time>${time}</time></div>
       ${replyTo ? `<button class="quoted-reply-box" data-jump-message="${escapeHtml(replyTo.id)}"><span class="quoted-reply-body"><strong class="quoted-reply-sender">${escapeHtml(replyTo.sender)}</strong><span class="quoted-reply-text">${formatMessageContent(replyTo.text)}</span></span></button>` : ''}
-      <div class="message-body">${formatMessageContent(text)}</div>
+      <div class="message-body">${formatChatBody(text)}</div>
       ${renderMessageReactionsHtml(m.reactions || [], id)}
       <div class="chat-actions-group" role="group" aria-label="Message actions">
         <button type="button" data-message-action="react" aria-label="React to message" title="React">${uiIcon('smile')}</button>
@@ -3621,7 +3635,7 @@ function renderPrivateBubble(m) {
           </span>
         </div>
         <div class="bubble-pill">
-          ${formatMessageContent(m.content)}
+          ${formatChatBody(m.content)}
           ${isMine ? `<span class="bubble-ticks">${renderTick(status)}</span>` : ''}
         </div>
       </div>
@@ -4549,6 +4563,7 @@ function initSocket() {
         if (!isMine) playReceiveSound();
         chatContainer.insertAdjacentHTML('beforeend', renderCampusMessageHtml(message));
         chatContainer.scrollTop = chatContainer.scrollHeight;
+        animateLiveEmoji(chatContainer, message);
       } else {
         render();
       }
@@ -4572,6 +4587,7 @@ function initSocket() {
       if (el) {
         el.insertAdjacentHTML('beforeend', renderPrivateBubble(message));
         el.scrollTop = el.scrollHeight;
+        animateLiveEmoji(el, message);
       }
     }
   });
