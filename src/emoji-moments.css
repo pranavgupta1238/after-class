@@ -1,8 +1,5 @@
-.emoji-message-content { display: inline-flex; align-items: center; gap: 3px; vertical-align: middle; transform-origin: center; }
-.emoji-moment-burst { position: fixed; inset: 0; pointer-events: none; z-index: 10010; overflow: hidden; }
-.emoji-moment-burst i { position: absolute; display: block; pointer-events: none; width: 6px; height: 9px; border-radius: 2px; opacity: 0; }
-.emoji-moment-burst .emoji-moment-heart { width: 8px; height: 8px; border-radius: 1px; }
-.emoji-moment-heart::before, .emoji-moment-heart::after { content: ''; position: absolute; width: 8px; height: 8px; border-radius: 50%; background: inherit; }
-.emoji-moment-heart::before { top: -4px; left: 0; }
-.emoji-moment-heart::after { top: 0; left: 4px; }
-@media (prefers-reduced-motion: reduce) { .emoji-moment-burst { display: none; } }
+.emoji-message-content { display:inline-flex;align-items:center;gap:3px;vertical-align:middle; }
+.emoji-actor { position:relative;display:inline-block;flex-shrink:0;vertical-align:middle;line-height:0; }
+.emoji-actor > img { display:block; }
+.emoji-actor-art { position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none; }
+@media(prefers-reduced-motion:reduce){.emoji-actor-art{display:none}.emoji-actor>img{visibility:visible!important}}
