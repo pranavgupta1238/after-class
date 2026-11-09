@@ -2042,28 +2042,34 @@ async function runEphemeralChatCleanup() {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
 
-    // 1. Delete individual expired 24-hour messages
+    // 1. Delete individual expired 24-hour messages (only if user explicitly sent as disappearing)
     const expiredDeleted = await prisma.message.deleteMany({
       where: {
         expiresAt: { not: null, lt: now }
       }
     });
 
-    // 2. Delete campus chat messages older than 7 days
-    const campusDeleted = await prisma.message.deleteMany({
-      where: {
-        createdAt: { lt: sevenDaysAgo },
-        room: { kind: RoomKind.campus }
-      }
-    });
+    // 2. Campus chat messages are preserved; only purge if explicitly enabled in production
+    let campusDeleted = { count: 0 };
+    if (process.env.ENABLE_EPHEMERAL_CLEANUP === 'true') {
+      campusDeleted = await prisma.message.deleteMany({
+        where: {
+          createdAt: { lt: sevenDaysAgo },
+          room: { kind: RoomKind.campus }
+        }
+      });
+    }
 
-    // 3. Delete standard match messages older than 14 days
-    const matchDeleted = await prisma.message.deleteMany({
-      where: {
-        createdAt: { lt: fourteenDaysAgo },
-        room: { kind: RoomKind.match }
-      }
-    });
+    // 3. Match messages older than 14 days if enabled
+    let matchDeleted = { count: 0 };
+    if (process.env.ENABLE_EPHEMERAL_CLEANUP === 'true') {
+      matchDeleted = await prisma.message.deleteMany({
+        where: {
+          createdAt: { lt: fourteenDaysAgo },
+          room: { kind: RoomKind.match }
+        }
+      });
+    }
 
     if (expiredDeleted.count > 0 || campusDeleted.count > 0 || matchDeleted.count > 0) {
       console.log(`[Ephemeral Cleanup] Purged ${expiredDeleted.count} 24h messages, ${campusDeleted.count} campus messages (>7d), and ${matchDeleted.count} DMs (>14d).`);
