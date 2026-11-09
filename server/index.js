@@ -17,6 +17,7 @@ const redis = require('./redis');
 const connectionPolicy = require('./connection-policy');
 const { registerConnections } = require('./connections');
 const { registerAccountReviews, restrictAccount } = require('./account-reviews');
+const { registerHearings } = require('./hearings');
 const SESSION_COOKIE = process.env.SESSION_COOKIE_NAME || 'session';
 
 const app = express();
@@ -40,7 +41,7 @@ const names = {
 };
 
 app.use((req, res, next) => {
-  if (req.method === 'POST' && /^\/api\/reviews(?:\/|$)/.test(req.path)) return express.json({ limit: '2200kb' })(req,res,next);
+  if (req.method === 'POST' && /^\/api\/(?:reviews|hearings)(?:\/|$)/.test(req.path)) return express.json({ limit: '2200kb' })(req,res,next);
   if (req.path === '/api/verify/selfie' || req.originalUrl?.startsWith('/api/verify/selfie')) {
     return express.json({ limit: '5mb' })(req, res, next);
   }
@@ -855,7 +856,8 @@ function closeConnectionMatch(m) {
   for (const id of [m.userOneId,m.userTwoId]) io.to('user:'+id).emit('match:cancelled', {matchId:m.id});
 }
 registerConnections({app,prisma,auth,requireAdmin,io,closeMatch:closeConnectionMatch});
-registerAccountReviews({app,prisma,sessionAuth,auth,isAdminUser,io,limit:redis.limit});
+const hearingService=registerHearings({app,prisma,sessionAuth,isAdminUser,limit:redis.limit});
+registerAccountReviews({app,prisma,sessionAuth,auth,isAdminUser,io,limit:redis.limit,hearingService});
 
 // Review login is only available with the isolated loopback database and explicit flag.
 app.get('/api/review', (req,res)=>res.json({enabled:reviewMode}));

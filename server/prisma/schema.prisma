@@ -118,6 +118,7 @@ model Campus {
   requests    MatchRequest[]
   reports     Report[]
   actions     ModerationAction[]
+  hearingSlots HearingSlot[]
 
   @@map("campuses")
 }
@@ -166,6 +167,10 @@ model User {
   assignedReviews AccountReview[] @relation("review_staff")
   moderationActions ModerationAction[] @relation("action_target")
   administeredActions ModerationAction[] @relation("action_admin")
+  hearingSlots HearingSlot[]
+  chairedHearings Hearing[]
+  hearingParticipation HearingParticipant[]
+  hearingMessages HearingMessage[]
 
   @@unique([campusId, publicAlias])
   @@index([campusId, accountStatus])
@@ -414,6 +419,7 @@ model AccountReview {
   action ModerationAction @relation(fields: [actionId], references: [id], onDelete: Restrict)
   user User @relation("review_owner", fields: [userId], references: [id], onDelete: Restrict)
   reviewer User? @relation("review_staff", fields: [reviewerId], references: [id], onDelete: SetNull)
+  hearing Hearing?
   entries ReviewEntry[]
   @@index([userId, createdAt])
   @@index([status, createdAt])
@@ -429,4 +435,68 @@ model ReviewEntry {
   review AccountReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
   @@index([reviewId, createdAt])
   @@map("review_entries")
+}
+
+model HearingSlot {
+  id String @id @default(uuid()) @db.Uuid
+  campusId String @map("campus_id") @db.Uuid
+  judgeId String @map("judge_id") @db.Uuid
+  startsAt DateTime @map("starts_at") @db.Timestamptz(6)
+  endsAt DateTime @map("ends_at") @db.Timestamptz(6)
+  cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  hearing Hearing?
+  campus Campus @relation(fields:[campusId],references:[id],onDelete:Cascade,onUpdate:NoAction)
+  judge User @relation(fields:[judgeId],references:[id],onDelete:Cascade,onUpdate:NoAction)
+  @@index([campusId, startsAt])
+  @@index([judgeId, startsAt])
+  @@map("hearing_slots")
+}
+model Hearing {
+  id String @id @default(uuid()) @db.Uuid
+  reviewId String @unique @map("review_id") @db.Uuid
+  slotId String? @unique @map("slot_id") @db.Uuid
+  judgeId String @map("judge_id") @db.Uuid
+  status String @default("scheduled") @db.VarChar(20)
+  floor String @default("appellant") @db.VarChar(40)
+  startedAt DateTime? @map("started_at") @db.Timestamptz(6)
+  deadline DateTime? @db.Timestamptz(6)
+  endedAt DateTime? @map("ended_at") @db.Timestamptz(6)
+  endReason String? @map("end_reason") @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  judge User @relation(fields:[judgeId],references:[id],onDelete:Restrict,onUpdate:NoAction)
+  review AccountReview @relation(fields:[reviewId],references:[id],onDelete:Cascade,onUpdate:NoAction)
+  slot HearingSlot? @relation(fields:[slotId],references:[id],onDelete:Restrict,onUpdate:NoAction)
+  participants HearingParticipant[]
+  messages HearingMessage[]
+  @@index([judgeId, status])
+  @@map("hearings")
+}
+model HearingParticipant {
+  id String @id @default(uuid()) @db.Uuid
+  hearingId String @map("hearing_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  role String @db.VarChar(20)
+  label String @db.VarChar(40)
+  response String @default("invited") @db.VarChar(20)
+  joinedAt DateTime? @map("joined_at") @db.Timestamptz(6)
+  lastSeenAt DateTime? @map("last_seen_at") @db.Timestamptz(6)
+  hearing Hearing @relation(fields:[hearingId],references:[id],onDelete:Cascade,onUpdate:NoAction)
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade,onUpdate:NoAction)
+  @@unique([hearingId,userId],map:"hearing_participants_hearing_id_user_id_key")
+  @@index([userId,response])
+  @@map("hearing_participants")
+}
+model HearingMessage {
+  id String @id @default(uuid()) @db.Uuid
+  hearingId String @map("hearing_id") @db.Uuid
+  authorId String? @map("author_id") @db.Uuid
+  label String @db.VarChar(40)
+  visibility String @default("shared") @db.VarChar(20)
+  body String @db.VarChar(4000)
+  attachments Json @default("[]")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  hearing Hearing @relation(fields:[hearingId],references:[id],onDelete:Cascade,onUpdate:NoAction)
+  author User? @relation(fields:[authorId],references:[id],onDelete:SetNull,onUpdate:NoAction)
+  @@index([hearingId,createdAt])
+  @@map("hearing_messages")
 }

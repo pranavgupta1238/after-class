@@ -21,7 +21,7 @@ async function restrictAccount(prisma,{userId,actor,action,body,reportId}){
   return record;
  },{timeout:20000});
 }
-function registerAccountReviews({app,prisma,sessionAuth,auth,isAdminUser,io,limit}){
+function registerAccountReviews({app,prisma,sessionAuth,auth,isAdminUser,io,limit,hearingService}){
  const guardAdmin=(req,res,next)=>auth(req,res,async()=>{
   try{if(!await isAdminUser(req.user))return res.status(403).json({error:'Moderator access required.'});next();}catch{res.status(503).json({error:'Please try again.'});}
  });
@@ -104,6 +104,8 @@ function registerAccountReviews({app,prisma,sessionAuth,auth,isAdminUser,io,limi
    const c=await staffCase(tx,req.params.id,req.user);await independent(tx,c,req.user);
    if(c.reviewerId!==req.user.id||!['in_review','awaiting_user'].includes(c.status))p.fail('Claim this open case before responding.',409);
    if(outcome!=='question'){
+    const hearing=await tx.hearing.findUnique({where:{reviewId:c.id}});
+    if(hearing&&['scheduled','live'].includes(hearing.status))p.fail('Close or cancel the hearing before sharing a final decision.',409);
     const latest=await tx.moderationAction.findFirst({where:{userId:c.userId,type:{in:restrictionTypes}},orderBy:{createdAt:'desc'}});
     if(outcome!=='upheld'&&(latest?.id!==c.actionId||c.action.liftedAt))p.fail('A newer decision or restoration exists. Review the current restriction instead.',409);
     if(outcome==='restored'){
@@ -119,7 +121,9 @@ function registerAccountReviews({app,prisma,sessionAuth,auth,isAdminUser,io,limi
    }
    await tx.accountReview.update({where:{id:c.id},data:outcome==='question'?{status:'awaiting_user'}:{status:'resolved',outcome,resolvedAt:new Date()}});
    await tx.reviewEntry.create({data:{reviewId:c.id,kind:outcome==='question'?'question':'decision',body}});
-  });res.json({ok:true});
+  });
+  const hearing=await prisma.hearing.findUnique({where:{reviewId:req.params.id},select:{id:true}});if(hearing)hearingService?.signal(hearing.id);
+  res.json({ok:true});
  });
 }
 module.exports={registerAccountReviews,restrictAccount};
