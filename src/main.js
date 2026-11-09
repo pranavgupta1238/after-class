@@ -9,6 +9,8 @@ import './cards.css';
 import './messaging.css';
 import './forms.css';
 import './emoji-moments.css';
+import './emoji-picker.css';
+import { EMOJI_CATEGORIES, selectEmojis } from './emoji-catalog.mjs';
 import { emojiMood, playEmojiMoment } from './emoji-moments.mjs';
 import { createAdminLoader } from './admin-loader.mjs';
 import { ACTIVITIES, activityFor, selectPlans, planTime } from './discovery.mjs';
@@ -381,9 +383,15 @@ const icons = {
 };
 
 import { EXPRESSIONS, expressionArt, renderExpressions, uiIcon } from './expressions.mjs';
-const ALL_UNICODE_EMOJIS = EXPRESSIONS;
-const CAMPUS_STICKERS = [];
-const EMOJI_NAV_TABS = [{id:'all',label:'All'},{id:'moods',label:'Moods'},{id:'signals',label:'Campus & reactions'}];
+const EMOJI_PAGE_SIZE = 120;
+let emojiLimit = EMOJI_PAGE_SIZE;
+let emojiTone = 'default';
+let recentEmojis = [];
+try {
+  emojiTone = localStorage.getItem('afterclass_emoji_tone') || 'default';
+  const saved = JSON.parse(localStorage.getItem('afterclass_recent_emojis') || '[]');
+  recentEmojis = Array.isArray(saved) ? saved.filter(e=>typeof e==='string').slice(0,32) : [];
+} catch {}
 
 function formatMessageContent(raw) {
   if (!raw) return '';
@@ -566,6 +574,7 @@ window.toggleChatMediaTray = (e, target = 'campus') => {
 };
 
 function renderChatMediaTray(anchorEl) {
+  emojiLimit = EMOJI_PAGE_SIZE;
   document.querySelector('#chat-media-tray')?.remove();
   const tray = document.createElement('div');
   tray.id = 'chat-media-tray';
@@ -583,102 +592,34 @@ function renderChatMediaTray(anchorEl) {
   document.body.appendChild(tray);
 }
 
-function getMediaTrayFullContent() {
-  const q = mediaTraySearchQuery.trim().toLowerCase();
-
-  let stickers = CAMPUS_STICKERS;
-  let emojis = ALL_UNICODE_EMOJIS;
-
-  if (q) {
-    stickers = CAMPUS_STICKERS.filter(s => s.label.toLowerCase().includes(q) || s.tags.toLowerCase().includes(q));
-    emojis = ALL_UNICODE_EMOJIS.filter(e => {
-      const name = e.n.toLowerCase();
-      if (name.includes(q) || e.e === q) return true;
-      const tags = e.t.toLowerCase().split(/\s+/);
-      return tags.some(tag => tag.startsWith(q) || tag === q);
-    });
-  } else if (mediaTrayActiveCategory !== 'all') {
-    if (mediaTrayActiveCategory === 'specials') {
-      emojis = [];
-    } else {
-      stickers = [];
-      emojis = ALL_UNICODE_EMOJIS.filter(e => e.c === mediaTrayActiveCategory);
-    }
-  }
-
-  const showSpecials = stickers.length > 0;
-  const showEmojis = emojis.length > 0;
-
-  return `
-    <div class="media-tray-header">
-      <div class="tray-brand-title">✦ <b>Afterclass</b> Expressions</div>
-      <button aria-label="Close expressions" class="media-tray-close" onclick="closeMediaTray()">✕</button>
-    </div>
-    <div class="emoji-search-wrapper">
-      <span aria-hidden="true">⌕</span>
-      <input type="text" id="emoji-search-input" placeholder="Search a mood or reaction…" value="${escapeHtml(mediaTraySearchQuery)}" oninput="handleEmojiSearch(this.value)">
-    </div>
-    <div class="emoji-category-nav">
-      ${EMOJI_NAV_TABS.map(tab => `
-        <button type="button" class="emoji-category-chip ${mediaTrayActiveCategory === tab.id ? 'active' : ''}" onclick="selectEmojiCategory(event, '${tab.id}')">
-          ${tab.label}
-        </button>
-      `).join('')}
-    </div>
-    <div class="media-tray-body" id="media-tray-body">
-      ${showSpecials ? `
-        <div>
-          <div class="tray-section-title">✦ CAMPUS SPECIALS</div>
-          <div class="sticker-grid">
-            ${stickers.map(s => `
-              <div class="sticker-item" onclick="insertSticker('${s.insert}', event)" title="${s.label}">
-                <span class="sticker-emoji">${s.emoji}</span>
-                <span class="sticker-label">${s.label}</span>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      ` : ''}
-
-      ${showEmojis ? `
-        <div>
-          <div class="tray-section-title">${mediaTrayActiveCategory === 'all' ? `AFTERCLASS ORIGINALS (${emojis.length})` : mediaTrayActiveCategory.toUpperCase() + ` (${emojis.length})`}</div>
-          <div class="standard-emoji-grid">
-            ${emojis.map(e => `
-              <button class="std-emoji-btn" onclick="insertSticker('${e.e}', event)" title="${e.n}" aria-label="${e.n}">
-                ${expressionArt(e.e)}
-              </button>
-            `).join('')}
-          </div>
-        </div>
-      ` : ''}
-
-      ${!showSpecials && !showEmojis ? `
-        <p class="muted" style="text-align:center;font-size:12px;padding:30px 0;">No emojis found for "${escapeHtml(mediaTraySearchQuery)}".</p>
-      ` : ''}
-    </div>
-  `;
+function emojiButtons(items) {
+  return items.map(item=>`<button type="button" class="std-emoji-btn" onclick="insertSticker('${escapeQuotes(item.e)}', event)" title="${escapeHtml(item.n)}" aria-label="${escapeHtml(item.n)}">${expressionArt(item.e,{lazy:true})}</button>`).join('');
 }
-
-window.selectEmojiCategory = (e, cat) => {
-  e?.stopPropagation?.();
-  if (mediaTrayActiveCategory === cat && !mediaTraySearchQuery) return;
-  mediaTrayActiveCategory = cat;
-  mediaTraySearchQuery = '';
-  const tray = document.querySelector('#chat-media-tray');
-  if (tray) tray.innerHTML = getMediaTrayFullContent();
-};
-
-window.handleEmojiSearch = query => {
-  mediaTraySearchQuery = query;
-  if (query.trim()) mediaTrayActiveCategory = 'all';
-  const body = document.querySelector('#media-tray-body');
-  if (body) {
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = getMediaTrayFullContent();
-    const newBody = tempDiv.querySelector('#media-tray-body');
-    if (newBody) body.innerHTML = newBody.innerHTML;
-  }
+function getMediaTrayBody() {
+  const emojis=selectEmojis({query:mediaTraySearchQuery,category:mediaTrayActiveCategory,tone:emojiTone,recent:recentEmojis});
+  const label=mediaTraySearchQuery.trim()?'Search results':EMOJI_CATEGORIES.find(c=>c.id===mediaTrayActiveCategory)?.label||'Emoji';
+  return `<div class="tray-section-title" role="status">${escapeHtml(label)} · ${emojis.length}</div><div class="standard-emoji-grid">${emojiButtons(emojis.slice(0,emojiLimit))}</div>${emojis.length>emojiLimit?'<button type="button" class="emoji-load-more" onclick="loadMoreEmojis()">Show more</button>':''}${!emojis.length?`<p class="emoji-empty">${mediaTrayActiveCategory==='recent'&&!mediaTraySearchQuery?'Your recently used emoji will appear here.':'No emoji found. Try a different search.'}</p>`:''}`;
+}
+function getMediaTrayFullContent() {
+  return `<div class="media-tray-header"><div class="tray-brand-title"><b>Emoji</b></div><button aria-label="Close emoji picker" class="media-tray-close" onclick="closeMediaTray()">×</button></div>
+    <div class="emoji-search-wrapper">${uiIcon('all')}<input type="search" id="emoji-search-input" placeholder="Search emoji" aria-label="Search emoji" value="${escapeHtml(mediaTraySearchQuery)}" oninput="handleEmojiSearch(this.value)"></div>
+    <div class="emoji-category-nav" aria-label="Emoji categories">${EMOJI_CATEGORIES.map(tab=>`<button type="button" class="emoji-category-chip ${mediaTrayActiveCategory===tab.id?'active':''}" aria-label="${tab.label}" aria-pressed="${mediaTrayActiveCategory===tab.id}" title="${tab.label}" onclick="selectEmojiCategory(event,'${tab.id}')">${expressionArt(tab.emoji,{lazy:true})}</button>`).join('')}</div>
+    <div class="media-tray-body" id="media-tray-body">${getMediaTrayBody()}</div>
+    <div class="emoji-picker-footer"><label>Skin tone<select aria-label="Emoji skin tone" onchange="setEmojiTone(this.value)">${[['default','Default'],['127995','Light'],['127996','Medium-light'],['127997','Medium'],['127998','Medium-dark'],['127999','Dark'],['all','All variations']].map(([value,label])=>`<option value="${value}" ${emojiTone===value?'selected':''}>${label}</option>`).join('')}</select></label><a href="/emoji/credits.html" target="_blank" rel="noopener">Artwork credits</a></div>`;
+}
+function refreshEmojiBody() {
+  const body=document.querySelector('#media-tray-body');
+  if(body){body.innerHTML=getMediaTrayBody();body.scrollTop=0;}
+  document.querySelectorAll('.emoji-category-chip').forEach((button,index)=>{const active=EMOJI_CATEGORIES[index].id===mediaTrayActiveCategory;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
+}
+window.selectEmojiCategory=(event,category)=>{event?.stopPropagation?.();mediaTrayActiveCategory=category;mediaTraySearchQuery='';emojiLimit=EMOJI_PAGE_SIZE;const search=document.querySelector('#emoji-search-input');if(search)search.value='';refreshEmojiBody();};
+window.handleEmojiSearch=query=>{mediaTraySearchQuery=query;if(query.trim())mediaTrayActiveCategory='all';emojiLimit=EMOJI_PAGE_SIZE;refreshEmojiBody();};
+window.setEmojiTone=tone=>{emojiTone=tone;emojiLimit=EMOJI_PAGE_SIZE;try{localStorage.setItem('afterclass_emoji_tone',tone)}catch{}refreshEmojiBody();};
+window.loadMoreEmojis=()=>{
+  const body=document.querySelector('#media-tray-body');if(!body)return;
+  const emojis=selectEmojis({query:mediaTraySearchQuery,category:mediaTrayActiveCategory,tone:emojiTone,recent:recentEmojis});
+  body.querySelector('.standard-emoji-grid').insertAdjacentHTML('beforeend',emojiButtons(emojis.slice(emojiLimit,emojiLimit+EMOJI_PAGE_SIZE)));
+  emojiLimit+=EMOJI_PAGE_SIZE;if(emojiLimit>=emojis.length)body.querySelector('.emoji-load-more')?.remove();
 };
 
 window.closeMediaTray = (e) => {
@@ -688,6 +629,8 @@ window.closeMediaTray = (e) => {
 
 window.insertSticker = (text, e) => {
   e?.stopPropagation?.();
+  recentEmojis = [text, ...recentEmojis.filter(item=>item!==text)].slice(0,32);
+  try { localStorage.setItem('afterclass_recent_emojis',JSON.stringify(recentEmojis)); } catch {}
   const inputId = mediaTrayTarget === 'campus' ? '#message' : '#private-msg-input';
   const input = document.querySelector(inputId);
   if (input) {
