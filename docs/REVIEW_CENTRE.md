@@ -35,7 +35,7 @@ Records are retained until explicitly removed through database administration. B
 
 ## Deployment
 
-The additive migrations are `20261109000200_account_review_centre` and `20261110000100_private_hearings`. They add decision metadata, reviews, timeline entries, appointment slots, hearing participants, and transcripts. New tables enable row-level security and are accessed by the server's existing privileged Prisma connection, never a browser database client.
+The additive migrations are `20261109000200_account_review_centre` `20261110000100_private_hearings`, and `20261110000200_hearing_speaking_requests`. They add decision metadata, reviews, timeline entries, appointment slots, hearing participants, and transcripts. New tables enable row-level security and are accessed by the server's existing privileged Prisma connection, never a browser database client.
 
 Run:
 
@@ -96,3 +96,13 @@ Run `npm run review` to rebuild and start the isolated review app. It includes a
 - **VelvetWillow**: invited reporting participant. Accept, decline, or contribute privately.
 
 Use separate browser profiles/private windows for simultaneous sessions; ordinary tabs share the selected demo account. The appointment initially covers the next 30 minutes. `npm run review:hearing-reset` resets only this fictional appeal and starts a fresh 30-minute appointment. Refresh the demo after resetting. Real accounts and Supabase are never used by this command.
+
+## Courtroom and speaking requests
+
+The hearing room uses locally rendered, anonymous role illustrations: a central seated moderator and separate account-holder and reporting-participant stands. Profile avatars are deliberately not used, to avoid identifying a reporting student. The room shows recent presence and highlights the current speaking turn. It remains a private platform review, not a legal court.
+
+During a live hearing, accepted participants who do not have the floor can choose **Objection** or **Request to speak**. Their character raises a hand and the moderator receives a request card with **Allow to speak** and **Not now**. Approval transfers the floor immediately; deferral leaves the current turn unchanged. Participants can withdraw their request. An objection never grants permission automatically, and the server enforces speaking permissions on every shared message.
+
+Only one request per participant can be pending, with a 15-second interval between new requests. Duplicate approvals are rejected under a hearing row lock. Declining participation clears pending requests and returns the floor to the moderator if necessary. Requests stop when the hearing ends. Moderator approvals and deferrals are recorded in the transcript. The moderator can also invite any accepted participant through direct buttons instead of a dropdown.
+
+The scene adapts to small screens and respects reduced-motion preferences. When multiple reporting participants accept, the scene displays the current speaker or a waiting requester; every accepted participant remains available in the moderator controls.
