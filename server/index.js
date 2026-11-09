@@ -11,6 +11,7 @@ const { Server } = require('socket.io');
 const { PrismaClient, RoomKind, MatchStatus, RevealStatus } = require('@prisma/client');
 const campuses = require('./campuses');
 const matchService = require('./match-service');
+const { canPair } = require('./match-policy');
 const redis = require('./redis');
 
 const app = express();
@@ -863,7 +864,7 @@ app.get('/api/match-requests', auth, async (req, res) => {
       include: { requester: true, applications: { where: { applicantId: req.user.id } } },
       orderBy: { createdAt: 'desc' }
     });
-    res.json({ requests: requests.map(r => matchService.publicRequest(r, req.user.id)) });
+    res.json({ requests: requests.filter(r => r.requesterId === req.user.id || canPair(req.user, r.requester)).map(r => matchService.publicRequest(r, req.user.id)) });
   } catch { res.status(503).json({ error: 'Matching is unavailable.' }); }
 });
 

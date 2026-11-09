@@ -1,3 +1,4 @@
+const { eligibleForPairing, assertPairing, isOpenPlan } = require('./match-policy');
 const { RoomKind, ApplicationStatus, MatchRequestStatus, MatchStatus, RevealStatus } = require('@prisma/client');
 
 function publicRequest(request, userId) {
@@ -15,6 +16,8 @@ function publicRequest(request, userId) {
 
 // Uses user.campusId (Prisma UUID) directly — no campus slug lookup needed.
 async function createRequest(prisma, user, data) {
+  const currentUser = await prisma.user.findUnique({ where: { id: user.id } });
+  if (!eligibleForPairing(currentUser)) throw new Error('Complete student verification and select man or woman before creating a one-to-one plan.');
   const schedTime = new Date(data.scheduledAt).getTime();
   const expiresAt = new Date(Math.max(Date.now() + 24 * 3600e3, schedTime + 2 * 3600e3));
   return prisma.matchRequest.create({
@@ -33,9 +36,12 @@ async function createRequest(prisma, user, data) {
 
 async function apply(prisma, user, requestId) {
   const request = await prisma.matchRequest.findFirst({
-    where: { id: requestId, campusId: user.campusId, status: MatchRequestStatus.open }
+    where: { id: requestId, campusId: user.campusId, status: MatchRequestStatus.open },
+    include: { requester: true }
   });
-  if (!request) throw new Error('This plan is no longer open.');
+  if (!isOpenPlan(request)) throw new Error('This plan is no longer open.');
+  const applicant = await prisma.user.findUnique({ where: { id: user.id } });
+  assertPairing(request.requester, applicant);
   if (request.requesterId === user.id) throw new Error('You cannot apply to your own plan.');
   
   const existing = await prisma.matchApplication.findFirst({
@@ -50,9 +56,17 @@ async function accept(prisma, user, applicationId) {
   return prisma.$transaction(async tx => {
     const application = await tx.matchApplication.findFirst({
       where: { id: applicationId, status: ApplicationStatus.pending },
-      include: { request: true }
+      include: { request: { include: { requester: true } }, applicant: true }
     });
     if (!application || application.request.requesterId !== user.id) throw new Error('Application unavailable');
+    if (!isOpenPlan(application.request)) throw new Error('This plan is no longer open.');
+    assertPairing(application.request.requester, application.applicant);
+    // Claim atomically so two concurrent accepts cannot create duplicate matches.
+    const claimed = await tx.matchRequest.updateMany({
+      where: { id: application.requestId, status: MatchRequestStatus.open, scheduledAt: { gt: new Date() }, expiresAt: { gt: new Date() } },
+      data: { status: MatchRequestStatus.matched }
+    });
+    if (claimed.count !== 1) throw new Error('This plan has already been matched or closed.');
     const room = await tx.chatRoom.create({ data: { campusId: application.request.campusId, kind: RoomKind.match } });
     const match = await tx.match.create({
       data: {
@@ -69,7 +83,6 @@ async function accept(prisma, user, applicationId) {
       where: { requestId: application.requestId, id: { not: application.id }, status: ApplicationStatus.pending },
       data: { status: ApplicationStatus.waiting }
     });
-    await tx.matchRequest.update({ where: { id: application.requestId }, data: { status: MatchRequestStatus.matched } });
     await tx.revealConsent.createMany({
       data: [
         { matchId: match.id, userId: user.id, status: RevealStatus.pending },
