@@ -147,6 +147,12 @@ model User {
   createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   lastActiveAt   DateTime      @default(now()) @map("last_active_at") @db.Timestamptz(6)
   campus         Campus        @relation(fields: [campusId], references: [id], onDelete: Restrict)
+  connectionProfile ConnectionProfile?
+  blocksMade UserBlock[] @relation("blocker")
+  blocksReceived UserBlock[] @relation("blocked")
+  meetingFeedback MeetingFeedback[]
+  verificationAppeals VerificationAppeal[] @relation("appeal_owner")
+  reviewedAppeals VerificationAppeal[] @relation("appeal_reviewer")
   aliases        AliasHistory[]
   sentMessages   Message[]
   createdRequests MatchRequest[] @relation("requester")
@@ -215,6 +221,7 @@ model MatchRequest {
   id                    String             @id @default(uuid()) @db.Uuid
   campusId              String             @map("campus_id") @db.Uuid
   requesterId           String             @map("requester_id") @db.Uuid
+  connectionMode        String             @default("social") @map("connection_mode")
   activity              String             @db.VarChar(100)
   location              String             @db.VarChar(120)
   scheduledAt           DateTime           @map("scheduled_at") @db.Timestamptz(6)
@@ -255,6 +262,13 @@ model Match {
   userTwoId        String          @map("user_two_id") @db.Uuid
   roomId           String          @unique @map("room_id") @db.Uuid
   status           MatchStatus     @default(active)
+  confirmedOneAt DateTime? @map("confirmed_one_at") @db.Timestamptz(6)
+  confirmedTwoAt DateTime? @map("confirmed_two_at") @db.Timestamptz(6)
+  proposedAt DateTime? @map("proposed_at") @db.Timestamptz(6)
+  proposedById String? @map("proposed_by_id") @db.Uuid
+  proposedLocation String? @map("proposed_location") @db.VarChar(120)
+  revision Int @default(0)
+  feedback MeetingFeedback[]
   disappearingMode Boolean         @default(false) @map("disappearing_mode")
   scheduledAt      DateTime        @map("scheduled_at") @db.Timestamptz(6)
   createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -322,4 +336,60 @@ model ModerationAction {
   @@index([userId, startsAt])
   @@index([campusId, createdAt])
   @@map("moderation_actions")
+}
+
+// Birth date and preferences are private. Only adult age is serialized for dating.
+model ConnectionProfile {
+  userId String @id @map("user_id") @db.Uuid
+  bio String @default("") @db.VarChar(240)
+  interests String[] @default([])
+  prompt String @default("") @db.VarChar(100)
+  answer String @default("") @db.VarChar(200)
+  birthDate DateTime? @map("birth_date") @db.Date
+  datingEnabled Boolean @default(false) @map("dating_enabled")
+  datingIntent String @default("relationship") @map("dating_intent")
+  minAge Int @default(18) @map("min_age")
+  maxAge Int @default(30) @map("max_age")
+  availableUntil DateTime? @map("available_until") @db.Timestamptz(6)
+  availabilityActivity String @default("coffee") @map("availability_activity") @db.VarChar(30)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([availableUntil])
+  @@map("connection_profiles")
+}
+model UserBlock {
+  blockerId String @map("blocker_id") @db.Uuid
+  blockedId String @map("blocked_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  blocker User @relation("blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  @@id([blockerId, blockedId])
+  @@index([blockedId])
+  @@map("user_blocks")
+}
+model MeetingFeedback {
+  id String @id @default(uuid()) @db.Uuid
+  matchId String @map("match_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  outcome String @db.VarChar(30)
+  note String @default("") @db.VarChar(400)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([matchId, userId])
+  @@map("meeting_feedback")
+}
+model VerificationAppeal {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  reason String @db.VarChar(1000)
+  status String @default("pending") @db.VarChar(30)
+  response String? @db.VarChar(1000)
+  reviewerId String? @map("reviewer_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  resolvedAt DateTime? @map("resolved_at") @db.Timestamptz(6)
+  user User @relation("appeal_owner", fields: [userId], references: [id], onDelete: Cascade)
+  reviewer User? @relation("appeal_reviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  @@index([userId, status])
+  @@map("verification_appeals")
 }

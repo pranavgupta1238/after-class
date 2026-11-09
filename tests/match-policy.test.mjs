@@ -24,16 +24,17 @@ test('apply checks current server account state before creating interest',async(
 });
 test('accept rechecks applicant verification before claiming a plan or creating a room',async()=>{
  let writes=0;
- const tx={matchApplication:{findFirst:async()=>({request:{requesterId:man.id,requester:man,status:'open',scheduledAt:new Date(Date.now()+60000),expiresAt:new Date(Date.now()+120000)},applicant:{...woman,verificationStatus:'rejected'}})},matchRequest:{updateMany:async()=>{writes++;return {count:1}}},chatRoom:{create:async()=>writes++}};
+ const tx={$queryRaw:async()=>[],user:{findUnique:async({where})=>where.id==='a'?man:woman},userBlock:{findFirst:async()=>null},matchApplication:{findFirst:async()=>({applicantId:'b',request:{requesterId:man.id,requester:man,status:'open',scheduledAt:new Date(Date.now()+60000),expiresAt:new Date(Date.now()+120000)},applicant:{...woman,verificationStatus:'rejected'}})},matchRequest:{updateMany:async()=>{writes++;return {count:1}}},chatRoom:{create:async()=>writes++}};
+ tx.user.findUnique=async({where})=>where.id==='a'?man:{...woman,verificationStatus:'rejected'};
  await assert.rejects(()=>accept({$transaction:fn=>fn(tx)},man,'application'),/verified accounts/);assert.equal(writes,0);
 });
 test('a lost atomic claim cannot create a second chat room',async()=>{
  let rooms=0;
- const tx={matchApplication:{findFirst:async()=>({requestId:'p',request:{requesterId:man.id,requester:man,status:'open',scheduledAt:new Date(Date.now()+60000),expiresAt:new Date(Date.now()+120000)},applicant:woman})},matchRequest:{updateMany:async()=>({count:0})},chatRoom:{create:async()=>rooms++}};
+ const tx={$queryRaw:async()=>[],user:{findUnique:async({where})=>where.id==='a'?man:woman},userBlock:{findFirst:async()=>null},matchApplication:{findFirst:async()=>({requestId:'p',applicantId:'b',applicantId:'b',request:{requesterId:man.id,requester:man,status:'open',scheduledAt:new Date(Date.now()+60000),expiresAt:new Date(Date.now()+120000)},applicant:woman})},matchRequest:{updateMany:async()=>({count:0})},chatRoom:{create:async()=>rooms++}};
  await assert.rejects(()=>accept({$transaction:fn=>fn(tx)},man,'application'),/already been matched/);assert.equal(rooms,0);
 });
 test('eligible acceptance creates a room, match and reciprocal consent',async()=>{
  const calls=[];
- const tx={matchApplication:{findFirst:async()=>({id:'app',requestId:'p',applicantId:'b',request:{requesterId:man.id,requester:man,campusId:'campus',status:'open',scheduledAt:new Date(Date.now()+60000),expiresAt:new Date(Date.now()+120000)},applicant:woman}),update:async()=>calls.push('accepted'),updateMany:async()=>calls.push('waiting')},matchRequest:{updateMany:async()=>({count:1})},chatRoom:{create:async()=>({id:'room'})},match:{create:async({data})=>{assert.equal(data.userOneId,'a');assert.equal(data.userTwoId,'b');return {id:'match',...data};}},revealConsent:{createMany:async({data})=>{assert.deepEqual(data.map(d=>d.userId),['a','b']);calls.push('consent');}}};
+ const tx={$queryRaw:async()=>[],user:{findUnique:async({where})=>where.id==='a'?man:woman},userBlock:{findFirst:async()=>null},matchApplication:{findFirst:async()=>({id:'app',requestId:'p',applicantId:'b',request:{requesterId:man.id,requester:man,campusId:'campus',status:'open',scheduledAt:new Date(Date.now()+60000),expiresAt:new Date(Date.now()+120000)},applicant:woman}),update:async()=>calls.push('accepted'),updateMany:async()=>calls.push('waiting')},matchRequest:{updateMany:async()=>({count:1})},chatRoom:{create:async()=>({id:'room'})},match:{create:async({data})=>{assert.equal(data.userOneId,'a');assert.equal(data.userTwoId,'b');return {id:'match',...data};}},revealConsent:{createMany:async({data})=>{assert.deepEqual(data.map(d=>d.userId),['a','b']);calls.push('consent');}}};
  const result=await accept({$transaction:fn=>fn(tx)},man,'app');assert.equal(result.id,'match');assert.deepEqual(calls,['accepted','waiting','consent']);
 });
