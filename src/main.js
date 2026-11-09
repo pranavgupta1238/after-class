@@ -2754,30 +2754,30 @@ function authPage() {
         <div class="auth-right-container">
           <div class="auth-glass-card">
             ${step === 'welcome' ? `
-              <span class="auth-form-eyebrow-tag">✦ JOIN AFTERCLASS</span>
-              <h2 class="auth-card-title">Where students<br>connect freely.</h2>
-              <p class="auth-card-sub">Your campus, a little closer. Join with your university account and find your kind of company.</p>
+              <span class="auth-form-eyebrow-tag">JOIN AFTERCLASS</span>
+              <h2 class="auth-card-title">Your campus.<br>A wider circle.</h2>
+              <p class="auth-card-sub">Meet students outside your usual group. Sign in with your university account to get started.</p>
 
-              <div class="auth-welcome-features">
-                <div class="auth-welcome-feature-item">
-                  <span>💬</span>
-                  <div><strong>A little room to be yourself</strong><br>Start a conversation using your campus alias.</div>
-                </div>
-                <div class="auth-welcome-feature-item">
-                  <span>👫</span>
-                  <div><strong>Meet over something simple</strong><br>Coffee, study sessions, walks. Find a shared reason.</div>
-                </div>
-                <div class="auth-welcome-feature-item">
-                  <span>⚡</span>
-                  <div><strong>Share when you’re ready</strong><br>Reveal your identity only with mutual consent.</div>
-                </div>
-              </div>
+              <ul class="auth-membership-details" aria-label="What you can do on Afterclass">
+                <li>
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H5l-3 3v-9.5A7.5 7.5 0 0 1 9.5 5h3a7.5 7.5 0 0 1 7.5 6.5Z"/><path d="M7 10h8M7 14h5"/></svg>
+                  <div><h3>Campus conversations</h3><p>Join the chat under an alias. Your real name stays off your public profile.</p></div>
+                </li>
+                <li>
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="16" rx="3"/><path d="M8 3v4m8-4v4M4 11h16m-10 5h4"/></svg>
+                  <div><h3>Plans beyond the group chat</h3><p>Find company for coffee, a study session, or a walk around campus.</p></div>
+                </li>
+                <li>
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
+                  <div><h3>An introduction you both choose</h3><p>Reveal your identity in a private chat only when you both agree.</p></div>
+                </li>
+              </ul>
 
               <button type="button" class="auth-primary-btn" onclick="handleStartForFree()">
                 Continue with student email →
               </button>
 
-              <div class="auth-divider-or"><span>or faster sign in</span></div>
+              <div class="auth-divider-or"><span>or</span></div>
 
               <button type="button" class="auth-google-btn" onclick="handleGoogleSignIn()">
                 <svg class="auth-google-icon" width="20" height="20" viewBox="0 0 24 24">
@@ -2788,7 +2788,7 @@ function authPage() {
                 </svg>
                 <span>Continue with Google</span>
               </button>
-              <div class="auth-google-hint">University student Google accounts only</div>
+              <div class="auth-google-hint">Use your university Google account</div>
 
               <div class="auth-alt-action">
                 Just browsing? <a onclick="go('home')">Enter as guest →</a>

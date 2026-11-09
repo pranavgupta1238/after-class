@@ -260,3 +260,11 @@ button:disabled { cursor: default; }
   .auth-page-wrapper .auth-welcome-features { display: none; }
   .auth-page-wrapper .auth-card-title { font-size: 31px; }
 }
+/* Student access: concise feature descriptions, without decorative tiles. */
+.auth-membership-details { list-style: none; margin: 24px 0 29px; padding: 0; }
+.auth-membership-details li { display: flex; align-items: flex-start; gap: 16px; padding: 20px 0; border-bottom: 1px solid #ffffff17; }
+.auth-membership-details li:first-child { border-top: 1px solid #ffffff17; }
+.auth-membership-details svg { width: 21px; height: 21px; color: #c2d0a6; flex-shrink: 0; margin-top: 2px; }
+.auth-membership-details h3 { font: 500 13px/1.5 'DM Sans', sans-serif; color: #eff2e5; margin: 0 0 5px; letter-spacing: .05px; }
+.auth-membership-details p { font: 400 12px/1.7 'DM Sans', sans-serif; color: #b4c2a9; margin: 0; }
+@media(max-width:800px) { .auth-membership-details { display: none; } }
