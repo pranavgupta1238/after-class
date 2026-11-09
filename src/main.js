@@ -239,6 +239,19 @@ function setCachedUser(user) {
 }
 
 function updateMe(user) {
+  if (!user || state.me?.id !== user.id) {
+    chatRequestController?.abort();
+    chatRequestController = null;
+    chatLoading = false;
+    chatInitialized = false;
+    chatLoadError = '';
+    state.messages = [];
+    state.campusOnlineCount = undefined;
+    setCachedMessages([]);
+    socket?.removeAllListeners();
+    socket?.disconnect();
+    socket = null;
+  }
   state.me = user;
   setCachedUser(user);
 }
@@ -333,6 +346,8 @@ function escapeQuotes(str) {
 }
 
 let socket, chatInitialized = false, chatLoading = false, chatAuthToastShown = false;
+let chatLoadError = '';
+let chatRequestController = null;
 
 const icons = {
   home: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12L12 3l9 9"/><path d="M9 21V12h6v9"/><path d="M5 10v11h14V10"/></svg>`,
@@ -846,6 +861,7 @@ document.addEventListener('click', event => {
 });
 
 function chat() {
+  if (!state.me) return layout(`<section class="chat-access-state"><span aria-hidden="true">${icons.chat}</span><h1>Join your campus conversation.</h1><p>Sign in with your university account to read and send messages.</p><button class="primary" onclick="openAuth()">Sign in to campus chat →</button></section>`);
   setTimeout(() => {
     loadLiveChat();
     renderReplyBar();
@@ -876,7 +892,7 @@ function chat() {
         </div>
         <div class="notice">✦ You’re chatting as <b>${username}</b>. Your identity stays private.</div>
         <div class="messages" id="chat-messages">
-          ${state.messages.length > 0 ? state.messages.map(renderCampusMessageHtml).join('') : (
+          ${chatLoadError ? `<div class="chat-access-state chat-load-error" role="status"><h2>Chat couldn’t load.</h2><p>${escapeHtml(chatLoadError)}</p><button class="primary" onclick="retryCampusChat()">Try again</button></div>` : state.messages.length > 0 ? state.messages.map(renderCampusMessageHtml).join('') : (
             !chatInitialized ? `
               <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:240px;color:var(--muted);gap:10px;">
                 <span class="auth-loading-spinner" style="display:inline-block;width:22px;height:22px;border:2.5px solid rgba(0,0,0,0.08);border-top-color:var(--forest);border-radius:50%;animation:spin 0.8s linear infinite;"></span>
@@ -4932,30 +4948,46 @@ async function loadInbox() {
 }
 
 async function loadLiveChat() {
-  if (chatInitialized || chatLoading) return;
+  if (!state.me || chatInitialized || chatLoading || chatLoadError) return;
   chatLoading = true;
+  const controller = new AbortController();
+  chatRequestController = controller;
+  const timeout = setTimeout(() => controller.abort(), 10000);
   try {
-    const history = await api('/messages');
-    state.messages = history.messages || [];
+    const history = await api('/messages', { signal: controller.signal });
+    if (chatRequestController !== controller) return;
+    if (!Array.isArray(history.messages)) throw new Error('Invalid chat response');
+    state.messages = history.messages;
     setCachedMessages(state.messages);
     chatInitialized = true;
-    chatAuthToastShown = false; // reset so it shows again if user logs out and back
-    if (state.view === 'chat') render();
     initSocket();
-    const el = document.querySelector('#chat-messages');
-    if (el) el.scrollTop = el.scrollHeight;
   } catch (err) {
-    if (err.message === 'Authentication required' && !chatAuthToastShown) {
-      chatAuthToastShown = true;
-      toast('Verify your college email to join campus chat.');
-    }
+    if (chatRequestController !== controller) return;
+    if (err.status === 401) updateMe(null);
+    else chatLoadError = err.status === 403 ? 'Your account does not currently have access to this conversation.' : 'The connection took too long or the service is unavailable. Please try again.';
   } finally {
-    chatLoading = false;
+    clearTimeout(timeout);
+    if (chatRequestController === controller) {
+      chatRequestController = null;
+      chatLoading = false;
+    }
+    if (state.view === 'chat') {
+      render();
+      const el = document.querySelector('#chat-messages');
+      if (el && chatInitialized) el.scrollTop = el.scrollHeight;
+    }
   }
 }
 
+window.retryCampusChat = () => {
+  chatLoadError = '';
+  chatInitialized = false;
+  loadLiveChat();
+  render();
+};
+
 function initSocket() {
-  if (socket?.connected || !state.me) return;
+  if (socket || !state.me) return;
   const socketUrl = import.meta.env.VITE_API_URL ? new URL(import.meta.env.VITE_API_URL).origin : location.origin;
   socket = io(socketUrl, { withCredentials: true });
 

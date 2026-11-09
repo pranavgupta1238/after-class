@@ -268,3 +268,9 @@ button:disabled { cursor: default; }
 .auth-membership-details h3 { font: 500 13px/1.5 'DM Sans', sans-serif; color: #eff2e5; margin: 0 0 5px; letter-spacing: .05px; }
 .auth-membership-details p { font: 400 12px/1.7 'DM Sans', sans-serif; color: #b4c2a9; margin: 0; }
 @media(max-width:800px) { .auth-membership-details { display: none; } }
+.chat-access-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 36px 24px; }
+.chat-access-state>span { display: grid; place-items: center; width: 64px; height: 64px; background: #e9efdf; color: #56734b; border-radius: 20px; margin-bottom: 22px; }
+.chat-access-state>span svg { width: 28px; height: 28px; }
+.chat-access-state h1,.chat-access-state h2 { font: 500 clamp(26px,3vw,38px)/1.2 'Playfair Display',Georgia,serif; margin: 0 0 15px; letter-spacing: -.8px; }
+.chat-access-state p { color: #718069; font-size: 13px; line-height: 1.8; max-width: 350px; margin: 0 0 24px; }
+.chat-load-error h2 { font-size: 28px; }
