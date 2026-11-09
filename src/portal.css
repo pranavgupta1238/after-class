@@ -86,3 +86,22 @@
 @media(prefers-reduced-motion:reduce) { .preference-switch span { transition:none; } }
 .account-layout .secondary,.portal-heading .secondary { border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--forest);padding:10px 14px;min-height:40px;font:500 12px 'DM Sans',sans-serif;cursor:pointer; }
 .account-summary>svg { width:72px;height:72px; }
+/* Afterclass artwork: identical geometry and color on every platform. */
+.ac-icon { width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0; }
+.quick-plan-options .ac-icon { width:24px;height:24px; }
+.activity-filters button,.quick-pick-chip,.plan-category { display:inline-flex;align-items:center;gap:8px; }
+.quick-pick-chip .ac-icon,.activity-filters .ac-icon,.plan-category .ac-icon { width:17px;height:17px; }
+.ac-expression { width:32px;height:32px;display:inline-block;vertical-align:middle; }
+.ac-signal { display:inline-grid;place-items:center;vertical-align:middle;width:32px;height:32px;border-radius:10px;background:#e8ecdf;color:#365e50; }
+.ac-signal-heart,.ac-signal-fire { background:#f4e4dd;color:#ad6254; }
+.ac-signal-coffee,.ac-signal-hundred { background:#f3e9d9;color:#956c45; }
+.std-emoji-btn .ac-expression,.std-emoji-btn .ac-signal { width:42px;height:42px; }
+.std-emoji-btn { min-width:48px;min-height:52px; }
+.standard-emoji-grid { grid-template-columns:repeat(6,minmax(0,1fr));gap:4px; }
+.message-body .ac-expression,.message-body .ac-signal { width:30px;height:30px; }
+.reaction-emoji .ac-expression,.reaction-emoji .ac-signal { width:22px;height:22px; }
+.reaction-emoji .ac-icon { width:16px;height:16px; }
+.reaction-picker-item .ac-expression,.reaction-picker-item .ac-signal { width:28px;height:28px; }
+.media-tray-header .tray-brand-title { font-size:13px; }
+.emoji-category-chip { font-size:12px; }
+.std-emoji-btn:hover { background:#edf0e5;box-shadow:none; }

@@ -360,7 +360,10 @@ const icons = {
   settings: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`
 };
 
-import { CAMPUS_STICKERS, EMOJI_CATEGORIES as EMOJI_NAV_TABS, ALL_UNICODE_EMOJIS } from './emojis.js';
+import { EXPRESSIONS, expressionArt, renderExpressions, uiIcon } from './expressions.mjs';
+const ALL_UNICODE_EMOJIS = EXPRESSIONS;
+const CAMPUS_STICKERS = [];
+const EMOJI_NAV_TABS = [{id:'all',label:'All'},{id:'moods',label:'Moods'},{id:'signals',label:'Campus & reactions'}];
 
 function formatMessageContent(raw) {
   if (!raw) return '';
@@ -370,7 +373,7 @@ function formatMessageContent(raw) {
     .replace(/>/g, '&gt;');
 
   escaped = escaped.replace(/(✦)/g, '<span class="special-star-emoji">✦</span>');
-  return escaped;
+  return renderExpressions(escaped);
 }
 
 function parseMessageContent(raw) {
@@ -397,7 +400,7 @@ function renderMessageReactionsHtml(reactions = [], msgId) {
     <div class="message-reactions-row" data-reactions-for="${msgId}">
       ${reactions.map(r => `
         <button type="button" class="msg-reaction-pill ${r.userReacted ? 'active' : ''}" onclick="toggleMessageReaction('${msgId}', '${r.emoji}')" title="${r.count} reaction${r.count === 1 ? '' : 's'}">
-          <span class="reaction-emoji">${r.emoji}</span>
+          <span class="reaction-emoji">${expressionArt(r.emoji)}</span>
           <span class="reaction-count">${r.count}</span>
         </button>
       `).join('')}
@@ -416,7 +419,7 @@ window.openMessageReactionPicker = (e, msgId) => {
   popover.className = 'msg-reaction-picker-popover';
   popover.innerHTML = CAMPUS_REACTION_EMOJIS.map(emoji => `
     <button type="button" class="reaction-picker-item" onclick="toggleMessageReaction('${msgId}', '${emoji}'); document.querySelector('.msg-reaction-picker-popover')?.remove();">
-      ${emoji}
+      ${expressionArt(emoji)}
     </button>
   `).join('');
 
@@ -465,7 +468,7 @@ window.toggleMessageReaction = (msgId, emoji) => {
     } else {
       row.insertAdjacentHTML('beforeend', `
         <button type="button" class="msg-reaction-pill active reaction-pop" onclick="toggleMessageReaction('${msgId}', '${emoji}')" title="1 reaction">
-          <span class="reaction-emoji">${emoji}</span>
+          <span class="reaction-emoji">${expressionArt(emoji)}</span>
           <span class="reaction-count">1</span>
         </button>
       `);
@@ -587,12 +590,12 @@ function getMediaTrayFullContent() {
 
   return `
     <div class="media-tray-header">
-      <div class="tray-brand-title">✦ <b>Afterclass</b> Emojis & Stickers</div>
-      <button class="media-tray-close" onclick="closeMediaTray()">✕</button>
+      <div class="tray-brand-title">✦ <b>Afterclass</b> Expressions</div>
+      <button aria-label="Close expressions" class="media-tray-close" onclick="closeMediaTray()">✕</button>
     </div>
     <div class="emoji-search-wrapper">
-      <span>🔍</span>
-      <input type="text" id="emoji-search-input" placeholder="Search 800+ emojis (e.g. fire, laugh, love, chai)..." value="${mediaTraySearchQuery}" oninput="handleEmojiSearch(this.value)">
+      <span aria-hidden="true">⌕</span>
+      <input type="text" id="emoji-search-input" placeholder="Search a mood or reaction…" value="${escapeHtml(mediaTraySearchQuery)}" oninput="handleEmojiSearch(this.value)">
     </div>
     <div class="emoji-category-nav">
       ${EMOJI_NAV_TABS.map(tab => `
@@ -618,11 +621,11 @@ function getMediaTrayFullContent() {
 
       ${showEmojis ? `
         <div>
-          <div class="tray-section-title">${mediaTrayActiveCategory === 'all' ? `ALL UNICODE EMOJIS (${emojis.length})` : mediaTrayActiveCategory.toUpperCase() + ` (${emojis.length})`}</div>
+          <div class="tray-section-title">${mediaTrayActiveCategory === 'all' ? `AFTERCLASS ORIGINALS (${emojis.length})` : mediaTrayActiveCategory.toUpperCase() + ` (${emojis.length})`}</div>
           <div class="standard-emoji-grid">
             ${emojis.map(e => `
-              <button class="std-emoji-btn" onclick="insertSticker('${e.e}', event)" title="${e.n}">
-                ${e.e}
+              <button class="std-emoji-btn" onclick="insertSticker('${e.e}', event)" title="${e.n}" aria-label="${e.n}">
+                ${expressionArt(e.e)}
               </button>
             `).join('')}
           </div>
@@ -630,7 +633,7 @@ function getMediaTrayFullContent() {
       ` : ''}
 
       ${!showSpecials && !showEmojis ? `
-        <p class="muted" style="text-align:center;font-size:12px;padding:30px 0;">No emojis found for "${mediaTraySearchQuery}".</p>
+        <p class="muted" style="text-align:center;font-size:12px;padding:30px 0;">No emojis found for "${escapeHtml(mediaTraySearchQuery)}".</p>
       ` : ''}
     </div>
   `;
@@ -758,7 +761,7 @@ function layout(content) {
         <div class="campus"><span>CAMPUS</span><b>${escapeHtml(campusName)}</b></div>
         <nav aria-label="Main navigation">${nav.map(([key,label,mobile])=>`<button type="button" data-nav="${key}" class="${state.view===key?'active':''}" ${state.view===key?'aria-current="page"':''} aria-label="${label}" onclick="go('${key}')"><span class="nav-icon" aria-hidden="true">${icons[key]||'◈'}</span><span class="nav-label">${label}</span><span class="nav-mobile-label">${mobile}</span>${key==='inbox'&&inboxCount?`<em aria-label="${inboxCount} incoming interests">${inboxCount}</em>`:''}</button>`).join('')}</nav>
 
-        <button class="sidebar-bottom" onclick="${me?'openAvatarPreview()':"go('auth')"}" aria-label="${me?'Open your profile':'Join your campus'}">${avatar(me?.avatarConfig||username,false,Boolean(me?.isVerified))}<span class="sidebar-profile-copy"><strong>${escapeHtml(username)}</strong><small>${me?(me.isVerified?'Verified student': 'Student profile'):'Sign in to get started'}</small></span><span class="profile-chevron" aria-hidden="true">↗</span></button>
+        <button class="sidebar-bottom" onclick="${me?'openAvatarPreview()':"go('auth')"}" aria-label="${me?'Open your profile':'Join your campus'}">${avatar(me?.avatarConfig||username,false,Boolean(me?.isVerified))}<span class="sidebar-profile-copy"><strong>${escapeHtml(username)}</strong><small>${me?(me.isVerified?'Verified student': 'Student profile'):'Sign in to get started'}</small></span></button>
       </aside>
       <main id="main-content" tabindex="-1" class="${state.view==='chat'?'chat-main':''}">
         <div class="experience-toolbar"><div class="toolbar-location"><span class="toolbar-symbol" aria-hidden="true">✳</span><span>${currentLabel}<small>${escapeHtml(campusName)}</small></span></div><a class="mobile-wordmark" href="/" onclick="event.preventDefault();go('home')">✦ afterclass<span>.</span></a><div class="toolbar-actions"><button class="toolbar-safety" aria-label="Trust and safety" onclick="go('safety')">${icons.safety}</button><button class="toolbar-create" aria-label="Create a plan" onclick="openComposer()"><span aria-hidden="true">＋</span><span class="toolbar-create-label">New plan</span></button><button class="toolbar-profile" aria-label="Open your profile" onclick="${me?'openAvatarPreview()':"go('auth')"}">${avatar(me?.avatarConfig||username,true,Boolean(me?.isVerified))}</button></div></div>
@@ -771,7 +774,7 @@ const discovery = { query: '', category: 'all', when: 'any', sort: 'soonest' };
 let discoverStatus = 'idle';
 
 function planLoadState() {
-  if (!state.me) return `<div class="campus-empty"><span class="campus-empty-icon">↗</span><h3>Sign in to see plans</h3><p>Sign in with your university email to see student plans.</p><button class="primary" onclick="go('auth')">Join your campus →</button></div>`;
+  if (!state.me) return `<div class="campus-empty"><h3>Sign in to see plans</h3><p>Sign in with your university email to see student plans.</p><button class="primary" onclick="go('auth')">Join your campus</button></div>`;
   if (discoverStatus === 'error') return `<div class="campus-empty" role="status"><span class="campus-empty-icon">↻</span><h3>We couldn’t load campus plans.</h3><p>Your connection may need a moment. Give it another try.</p><button class="primary" onclick="retryDiscover()">Try again</button></div>`;
   if (discoverStatus === 'loading' || discoverStatus === 'idle') return `<div class="campus-empty" role="status"><span class="campus-empty-icon">✦</span><h3>Loading plans…</h3><p>Loading plans from your campus.</p></div>`;
   return '';
@@ -781,10 +784,10 @@ function home() {
   const plans = selectPlans(state.requests);
   return layout(`
     <section class="portal-heading"><div><span class="eyebrow">${escapeHtml(state.me?.university || 'NIIT University')}</span><h1>After hours.</h1><p>See what’s happening on campus.</p></div><button class="primary" onclick="openComposer()">＋ New plan</button></section>
-    <section class="quick-plans" aria-label="Start a plan"><div><h2>What are you up for?</h2><p>Start with something you enjoy.</p></div><div class="quick-plan-options">${ACTIVITIES.slice(1).map(a=>`<button onclick="startPlanIdea('${a.id}')"><span aria-hidden="true">${a.icon}</span>${a.label}<b aria-hidden="true">↗</b></button>`).join('')}</div></section>
-    <section class="portal-section-head"><h2>Upcoming plans</h2><button class="link" onclick="go('discover')">View all ↗</button></section>
+    <section class="quick-plans" aria-label="Start a plan"><div><h2>What are you up for?</h2><p>Start with something you enjoy.</p></div><div class="quick-plan-options">${ACTIVITIES.slice(1).map(a=>`<button onclick="startPlanIdea('${a.id}')"><span aria-hidden="true">${uiIcon(a.id)}</span>${a.label}</button>`).join('')}</div></section>
+    <section class="portal-section-head"><h2>Upcoming plans</h2><button class="link" onclick="go('discover')">View all</button></section>
     <div class="request-grid campus-plan-grid">${planLoadState() || (plans.length ? plans.slice(0,3).map(card).join('') : `<div class="campus-empty"><span class="campus-empty-icon" aria-hidden="true">＋</span><h3>No plans yet</h3><p>Invite someone to join yours.</p><button class="primary" onclick="openComposer()">Create a plan</button></div>`)}</div>
-    <button class="room-shortcut" onclick="go('chat')"><span class="room-shortcut-icon">${icons.chat}</span><span><strong>Campus chat</strong><small>Join the conversation</small></span><b aria-hidden="true">↗</b></button>
+    <button class="room-shortcut" onclick="go('chat')"><span class="room-shortcut-icon">${icons.chat}</span><span><strong>Campus chat</strong><small>Join the conversation</small></span></button>
   `);
 }
 
@@ -795,11 +798,11 @@ function card(r) {
   const activity = activityFor(r);
   const id = escapeHtml(String(r.id));
   return `<article class="plan-card campus-plan-card" data-category="${activity.id}">
-    <div class="plan-top"><span class="plan-category"><span>${activity.icon}</span>${activity.label}</span><button type="button" class="plan-bookmark-btn ${isSaved ? 'saved' : ''}" data-save-plan="${id}" aria-label="${isSaved ? 'Unsave' : 'Save'} ${escapeHtml(r.activity)}" aria-pressed="${Boolean(isSaved)}"><svg width="18" height="18" viewBox="0 0 24 24" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.7"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button></div>
+    <div class="plan-top"><span class="plan-category"><span>${uiIcon(activity.id)}</span>${activity.label}</span><button type="button" class="plan-bookmark-btn ${isSaved ? 'saved' : ''}" data-save-plan="${id}" aria-label="${isSaved ? 'Unsave' : 'Save'} ${escapeHtml(r.activity)}" aria-pressed="${Boolean(isSaved)}"><svg width="18" height="18" viewBox="0 0 24 24" fill="${isSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.7"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button></div>
     <time class="plan-time" datetime="${escapeHtml(r.scheduledAt)}">${planTime(r.scheduledAt)}</time>
     <h3>${escapeHtml(r.activity)}</h3><p class="plan-location">⌖ ${escapeHtml(r.location || 'Campus')}</p>
     <div class="plan-host-row">${avatar(r.host?.username || 'Student')}<span>Hosted by <b>${escapeHtml(r.host?.username || 'Student')}</b></span></div>
-    <footer><span>${isMine ? 'Your invitation' : 'Start with a shared plan'}</span>${isMine ? `<button class="campus-text-action" onclick="go('inbox')">Manage →</button>` : hasApplied ? '<button class="applied-btn" disabled>Interest sent ✓</button>' : `<button data-join-plan="${id}">I’m interested ↗</button>`}</footer>
+    <footer><span>${isMine ? 'Your invitation' : 'Start with a shared plan'}</span>${isMine ? `<button class="campus-text-action" onclick="go('inbox')">Manage</button>` : hasApplied ? '<button class="applied-btn" disabled>Interest sent ✓</button>' : `<button data-join-plan="${id}">I’m interested</button>`}</footer>
   </article>`;
 }
 
@@ -821,10 +824,10 @@ function discover() {
   const filter = state.discoverFilter || 'all';
   return layout(`<section class="portal-heading"><div><h1>Discover</h1><p>Plans worth stepping out for.</p></div><button class="primary" onclick="openComposer()">＋ Create a plan</button></section>
     <section class="discovery-tools" aria-label="Filter campus plans"><div class="discovery-search-row"><label class="discovery-search"><span aria-hidden="true">⌕</span><input type="search" id="plan-search" value="${escapeHtml(discovery.query)}" placeholder="Try chai, library, badminton…" aria-label="Search activities or locations" oninput="searchCampusPlans(this.value)"></label><label class="discovery-select">When<select onchange="setPlanOption('when',this.value)">${[['any','Any time'],['today','Today'],['tomorrow','Tomorrow'],['week','Next 7 days']].map(([v,l])=>`<option value="${v}" ${discovery.when===v?'selected':''}>${l}</option>`).join('')}</select></label></div>
-    <div class="activity-filters" role="group" aria-label="Activity type">${ACTIVITIES.map(a=>`<button aria-pressed="${discovery.category===a.id}" class="${discovery.category===a.id?'selected':''}" onclick="setPlanOption('category','${a.id}')">${a.icon} ${a.label}</button>`).join('')}</div></section>
+    <div class="activity-filters" role="group" aria-label="Activity type">${ACTIVITIES.map(a=>`<button aria-pressed="${discovery.category===a.id}" class="${discovery.category===a.id?'selected':''}" onclick="setPlanOption('category','${a.id}')">${uiIcon(a.id)} ${a.label}</button>`).join('')}</div></section>
     <div class="discovery-results-bar"><div class="discovery-tabs"><button class="${filter==='all'?'selected':''}" aria-pressed="${filter==='all'}" onclick="setDiscoverFilter('all')">All plans</button><button class="${filter==='saved'?'selected':''}" aria-pressed="${filter==='saved'}" onclick="setDiscoverFilter('saved')">Saved</button></div><label class="discovery-sort">Sort by<select aria-label="Sort plans" onchange="setPlanOption('sort',this.value)"><option value="soonest" ${discovery.sort==='soonest'?'selected':''}>Happening soonest</option><option value="newest" ${discovery.sort==='newest'?'selected':''}>Recently posted</option></select></label></div>
     <p class="discovery-count" id="discovery-count" aria-live="polite">${discoveryCount()}</p><div class="request-grid all campus-plan-grid" id="discovery-results">${discoveryResults()}</div>
-    <div class="discovery-nudge"><span>Can’t find your kind of plan?</span><button class="campus-text-action" onclick="openComposer()">Create one ↗</button></div>`);
+    <div class="discovery-nudge"><span>Can’t find your kind of plan?</span><button class="campus-text-action" onclick="openComposer()">Create one</button></div>`);
 }
 
 window.browseActivity = category => { discovery.category = category; state.discoverFilter = 'all'; go('discover'); };
@@ -841,7 +844,7 @@ document.addEventListener('click', event => {
 });
 
 function chat() {
-  if (!state.me) return layout(`<section class="chat-access-state"><span aria-hidden="true">${icons.chat}</span><h1>Join your campus conversation.</h1><p>Sign in with your university account to read and send messages.</p><button class="primary" onclick="openAuth()">Sign in to campus chat →</button></section>`);
+  if (!state.me) return layout(`<section class="chat-access-state"><span aria-hidden="true">${icons.chat}</span><h1>Join your campus conversation.</h1><p>Sign in with your university account to read and send messages.</p><button class="primary" onclick="openAuth()">Sign in to campus chat</button></section>`);
   setTimeout(() => {
     loadLiveChat();
     renderReplyBar();
@@ -880,7 +883,7 @@ function chat() {
               </div>
             ` : `
               <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:240px;color:var(--muted);gap:8px;text-align:center;padding:20px;">
-                <div style="width:46px;height:46px;border-radius:50%;background:#eef4ec;color:#244d42;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:2px;">💬</div>
+                <div style="width:46px;height:46px;border-radius:50%;background:#eef4ec;color:#244d42;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:2px;">${icons.chat}</div>
                 <div style="font:600 16px 'Playfair Display';color:var(--ink);">Start the conversation</div>
                 <div style="font-size:12.5px;color:var(--muted);max-width:280px;line-height:1.45;">A shared space for your campus. Ask a question or be the first to say hello.</div>
               </div>
@@ -939,7 +942,7 @@ function inbox() {
                 <h3>${a.activity}</h3>
                 <p>A fellow student wants to join your plan.</p>
               </div>
-              <button class="primary" onclick="acceptApplication('${a.id}')">Accept & Open Chat →</button>
+              <button class="primary" onclick="acceptApplication('${a.id}')">Accept & Open Chat</button>
             </div>
           `).join('')}
         </section>
@@ -950,13 +953,13 @@ function inbox() {
           <h3 style="font-size:16px; margin-bottom:12px;">Active Match Chats</h3>
           ${state.matches.map(m => `
             <div class="conversation">
-              <div class="conversation-avatar">☕</div>
+              <div class="conversation-avatar">${uiIcon('coffee')}</div>
               <div>
                 <span class="eyebrow">${m.status.toUpperCase()}</span>
                 <h3>${m.activity}</h3>
                 <p>${avatar(m.other?.username || 'Student', true)} ${m.other?.username || 'Student'} · ${m.location}</p>
               </div>
-              <button onclick="openPrivateChat('${m.id}')">Open chat →</button>
+              <button onclick="openPrivateChat('${m.id}')">Open chat</button>
             </div>
           `).join('')}
         </section>
@@ -1009,7 +1012,7 @@ function inbox() {
           </div>
         ` : `
           <div class="empty-inbox">
-            <span>☕</span>
+            <span>${uiIcon('coffee')}</span>
             <h2>No posted plans yet.</h2>
             <p>Have an idea for a study session, coffee meetup, or gym workout?</p>
             <button class="primary" onclick="openComposer()">＋ Create a plan</button>
@@ -2359,11 +2362,11 @@ function settings() {
   const device = getDeviceDescription();
   const row = (title, description, control) => `<div class="preference-row"><div><strong>${title}</strong><small>${description}</small></div>${control}</div>`;
   return layout(`<section class="portal-heading"><div><h1>Settings</h1><p>Your account, your preferences.</p></div></section>
-    <div class="account-layout"><div class="account-summary">${avatar(me?.avatarConfig || me?.username || 'Guest',false,Boolean(me?.isVerified))}<h2>${escapeHtml(me?.username || 'Guest')}</h2><p>${escapeHtml(me?.university || 'NIIT University')}</p><span class="account-status">${me?.isVerified ? 'Verified student' : me ? 'Student account' : 'Not signed in'}</span><button class="secondary" onclick="${me?'openAvatarPreview()':'openAuth()'}">${me?'View profile':'Sign in'}</button>${me?.isAdmin?`<button class="account-admin" onclick="go('admin')">Moderation workspace ↗</button>`:''}</div>
+    <div class="account-layout"><div class="account-summary">${avatar(me?.avatarConfig || me?.username || 'Guest',false,Boolean(me?.isVerified))}<h2>${escapeHtml(me?.username || 'Guest')}</h2><p>${escapeHtml(me?.university || 'NIIT University')}</p><span class="account-status">${me?.isVerified ? 'Verified student' : me ? 'Student account' : 'Not signed in'}</span><button class="secondary" onclick="${me?'openAvatarPreview()':'openAuth()'}">${me?'View profile':'Sign in'}</button>${me?.isAdmin?`<button class="account-admin" onclick="go('admin')">Moderation workspace</button>`:''}</div>
     <div class="account-sections"><section class="preference-group"><h2>Profile & privacy</h2>
       ${row('Campus alias','Your public name on Afterclass.',`<span>${escapeHtml(me?.username || 'Guest')}</span>`)}
       ${row('Student verification',me?.isVerified?'Your student profile is verified.':me?.verificationStatus==='pending'?'Your submission is awaiting review.':me?.verificationStatus==='rejected'?'Submit a new photo for review.':'Verify your student profile.',me?.isVerified?'<span class="account-status">Verified</span>':me?`<div class="preference-actions">${me.verificationStatus==='pending'?`<button class="secondary" onclick="loadMe()">Check status</button>`:''}<button class="secondary" onclick="openVerificationModal()">${me.verificationStatus==='pending'?'Retake':'Verify'}</button></div>`:`<button class="secondary" onclick="openAuth()">Sign in</button>`)}
-      ${row('Identity sharing','Reveal your identity only when you both agree.',`<button class="link" onclick="go('safety')">Privacy & safety ↗</button>`)}
+      ${row('Identity sharing','Reveal your identity only when you both agree.',`<button class="link" onclick="go('safety')">Privacy & safety</button>`)}
     </section><section class="preference-group"><h2>Notifications</h2>
       ${row('Push notifications',!('Notification' in window)?'Not supported in this browser.':Notification.permission==='denied'?'Blocked in browser settings.':'Messages and plan invitations.',`<button class="preference-switch" role="switch" aria-label="Push notifications" aria-checked="${isOn}" onclick="${granted?'toggleSettingsNotifications()':'enableSettingsNotifications()'}" ${!('Notification' in window)?'disabled':''}><span></span></button>`)}
       ${row('Sound effects','Play sounds for in-app activity.',`<button class="preference-switch" role="switch" aria-label="Sound effects" aria-checked="${soundOn}" onclick="toggleSettingsSound()"><span></span></button>`)}
@@ -2412,8 +2415,8 @@ function authPage() {
             <div class="welcome-orbit" aria-hidden="true"></div>
             <div class="welcome-avatar avatar-one" aria-hidden="true">${renderAvatarSvg('VelvetOtter',72)}</div>
             <div class="welcome-avatar avatar-two" aria-hidden="true">${renderAvatarSvg('SunnyFox',72)}</div>
-            <div class="welcome-note"><span>A SMALL INVITATION</span><strong>One coffee.<br>Two stories.</strong><div><span>☕</span><small>Somewhere on campus.<br>Whenever you’re ready.</small></div></div>
-            <div class="welcome-hello">It starts with <em>hello.</em><span>↗</span></div>
+            <div class="welcome-note"><span>A SMALL INVITATION</span><strong>One coffee.<br>Two stories.</strong><div><span>${uiIcon('coffee')}</span><small>Somewhere on campus.<br>Whenever you’re ready.</small></div></div>
+            <div class="welcome-hello">It starts with <em>hello.</em></div>
             <span class="welcome-art-caption">LESS PRESSURE. MORE POSSIBILITY.</span>
           </div>
           <div class="welcome-values"><span>01 <b>Campus only</b></span><span>02 <b>Alias first</b></span><span>03 <b>Your pace</b></span></div>
@@ -2597,7 +2600,7 @@ function renderAvatarPreviewModal() {
       </div>
 
       <div class="showcase-actions">
-        <button class="primary wide" onclick="openAvatarStudio()">🎨 Customize Character & Wardrobe →</button>
+        <button class="primary wide" onclick="openAvatarStudio()">🎨 Customize Character & Wardrobe</button>
       </div>
     </div>
   `));
@@ -2824,8 +2827,8 @@ function openComposer() {
   document.body.insertAdjacentHTML('beforeend', modal(`
     <div class="composer-modal-content">
       <span class="eyebrow">MAKE A PLAN</span>
-      <h2>What would feel good?</h2>
-      <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">Create a low-pressure campus plan. Verified students can express interest.</p>
+      <h2>Create a plan</h2>
+      <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">Choose an activity, a public spot, and a time.</p>
 
       <form onsubmit="createPlan(event)">
         <div class="composer-field-group">
@@ -2833,12 +2836,12 @@ function openComposer() {
             <input id="plan-activity" placeholder="e.g. Coffee & study session" required maxlength="100">
           </label>
           <div class="quick-chips-row">
-            <button type="button" class="quick-pick-chip activity-chip" data-val="Coffee meetup ☕" onclick="selectQuickActivity('Coffee meetup ☕')">☕ Coffee meetup</button>
-            <button type="button" class="quick-pick-chip activity-chip" data-val="Library study session 📚" onclick="selectQuickActivity('Library study session 📚')">📚 Study session</button>
-            <button type="button" class="quick-pick-chip activity-chip" data-val="Badminton / Gym 🏸" onclick="selectQuickActivity('Badminton / Gym 🏸')">🏸 Badminton / Gym</button>
-            <button type="button" class="quick-pick-chip activity-chip" data-val="Quick bite / Lunch 🍱" onclick="selectQuickActivity('Quick bite / Lunch 🍱')">🍱 Quick bite / Mess</button>
-            <button type="button" class="quick-pick-chip activity-chip" data-val="Evening campus walk 🚶" onclick="selectQuickActivity('Evening campus walk 🚶')">🚶 Campus walk</button>
-            <button type="button" class="quick-pick-chip activity-chip" data-val="Gaming session 🎮" onclick="selectQuickActivity('Gaming session 🎮')">🎮 Gaming</button>
+            <button type="button" class="quick-pick-chip activity-chip" data-val="Coffee meetup" onclick="selectQuickActivity('Coffee meetup')">${uiIcon('coffee')} Coffee meetup</button>
+            <button type="button" class="quick-pick-chip activity-chip" data-val="Library study session" onclick="selectQuickActivity('Library study session')">${uiIcon('study')} Study session</button>
+            <button type="button" class="quick-pick-chip activity-chip" data-val="Badminton / Gym" onclick="selectQuickActivity('Badminton / Gym')">${uiIcon('move')} Badminton / Gym</button>
+            <button type="button" class="quick-pick-chip activity-chip" data-val="Quick bite / Lunch" onclick="selectQuickActivity('Quick bite / Lunch')">${uiIcon('food')} Quick bite / Mess</button>
+            <button type="button" class="quick-pick-chip activity-chip" data-val="Evening campus walk" onclick="selectQuickActivity('Evening campus walk')">${uiIcon('move')} Campus walk</button>
+            <button type="button" class="quick-pick-chip activity-chip" data-val="Gaming session" onclick="selectQuickActivity('Gaming session')">${uiIcon('play')} Gaming</button>
           </div>
         </div>
 
@@ -2847,12 +2850,12 @@ function openComposer() {
             <input id="plan-where" placeholder="e.g. Central Library Cafe" required maxlength="120">
           </label>
           <div class="quick-chips-row">
-            <button type="button" class="quick-pick-chip location-chip" data-val="Central Library Cafe" onclick="selectQuickLocation('Central Library Cafe')">☕ Library Cafe</button>
-            <button type="button" class="quick-pick-chip location-chip" data-val="Indoor Sports Complex" onclick="selectQuickLocation('Indoor Sports Complex')">🏸 Sports Complex</button>
-            <button type="button" class="quick-pick-chip location-chip" data-val="Food Court / Cafeteria" onclick="selectQuickLocation('Food Court / Cafeteria')">🍱 Food Court</button>
-            <button type="button" class="quick-pick-chip location-chip" data-val="Green Amphitheater" onclick="selectQuickLocation('Green Amphitheater')">🌿 Amphitheater</button>
-            <button type="button" class="quick-pick-chip location-chip" data-val="Academic Tech Block" onclick="selectQuickLocation('Academic Tech Block')">💻 Tech Block</button>
-            <button type="button" class="quick-pick-chip location-chip" data-val="Basketball Courts" onclick="selectQuickLocation('Basketball Courts')">🏀 Basketball Courts</button>
+            <button type="button" class="quick-pick-chip location-chip" data-val="Central Library Cafe" onclick="selectQuickLocation('Central Library Cafe')">${uiIcon('coffee')} Library Cafe</button>
+            <button type="button" class="quick-pick-chip location-chip" data-val="Indoor Sports Complex" onclick="selectQuickLocation('Indoor Sports Complex')">${uiIcon('move')} Sports Complex</button>
+            <button type="button" class="quick-pick-chip location-chip" data-val="Food Court / Cafeteria" onclick="selectQuickLocation('Food Court / Cafeteria')">${uiIcon('food')} Food Court</button>
+            <button type="button" class="quick-pick-chip location-chip" data-val="Green Amphitheater" onclick="selectQuickLocation('Green Amphitheater')">${uiIcon('leaf')} Amphitheater</button>
+            <button type="button" class="quick-pick-chip location-chip" data-val="Academic Tech Block" onclick="selectQuickLocation('Academic Tech Block')">${uiIcon('laptop')} Tech Block</button>
+            <button type="button" class="quick-pick-chip location-chip" data-val="Basketball Courts" onclick="selectQuickLocation('Basketball Courts')">${uiIcon('ball')} Basketball Courts</button>
           </div>
         </div>
 
@@ -2861,16 +2864,16 @@ function openComposer() {
             <input id="plan-when" type="datetime-local" min="${nowIso}" value="${defaultIso}" required>
           </label>
           <div class="quick-chips-row">
-            <button type="button" class="quick-pick-chip time-chip" data-val="30m" onclick="selectQuickTime('30m')">⚡ In 30 mins</button>
-            <button type="button" class="quick-pick-chip time-chip" data-val="afternoon" onclick="selectQuickTime('afternoon')">☕ This Afternoon (4 PM)</button>
-            <button type="button" class="quick-pick-chip time-chip" data-val="tonight" onclick="selectQuickTime('tonight')">🌙 Tonight (8 PM)</button>
-            <button type="button" class="quick-pick-chip time-chip" data-val="tomorrow" onclick="selectQuickTime('tomorrow')">📅 Tomorrow (11 AM)</button>
+            <button type="button" class="quick-pick-chip time-chip" data-val="30m" onclick="selectQuickTime('30m')">${uiIcon('clock')} In 30 mins</button>
+            <button type="button" class="quick-pick-chip time-chip" data-val="afternoon" onclick="selectQuickTime('afternoon')">${uiIcon('coffee')} This Afternoon (4 PM)</button>
+            <button type="button" class="quick-pick-chip time-chip" data-val="tonight" onclick="selectQuickTime('tonight')">${uiIcon('moon')} Tonight (8 PM)</button>
+            <button type="button" class="quick-pick-chip time-chip" data-val="tomorrow" onclick="selectQuickTime('tomorrow')">${uiIcon('calendar')} Tomorrow (11 AM)</button>
           </div>
         </div>
 
         <div class="modal-actions" style="margin-top: 18px; display: flex; justify-content: flex-end; gap: 10px;">
           <button type="button" class="text-btn" onclick="closeModal()">Cancel</button>
-          <button class="primary" type="submit">Share Plan ✦</button>
+          <button class="primary" type="submit">Share plan</button>
         </div>
       </form>
     </div>
@@ -4023,7 +4026,7 @@ window.sendOtp = async e => {
         <input id="auth-code" inputmode="numeric" required maxlength="6" autofocus placeholder="123456">
       </label>
       ${r.developmentCode ? `<p class="dev-code" style="color:var(--green); font-size:12px; margin-top:8px;">Development code: <b>${r.developmentCode}</b></p>` : ''}
-      <button class="primary wide" type="submit">Verify and join →</button>
+      <button class="primary wide" type="submit">Verify and join</button>
     `;
     document.querySelector('#otp-form').onsubmit = ev => verifyOtp(ev, email);
   } catch (err) {
