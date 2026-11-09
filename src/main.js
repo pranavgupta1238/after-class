@@ -1,3 +1,4 @@
+import { installReviewCentre } from './review-centre.js';
 import { installConnections } from './connections.js';
 import './style.css';
 import './campus.css';
@@ -254,6 +255,7 @@ function setCachedUser(user) {
 
 function updateMe(user) {
   if (!user?.isAdmin || state.me?.id !== user.id) {
+    window.reviewCentre?.reset();
     adminLoader.reset();
     contextLoader.reset();
     state.adminLoads = {};
@@ -710,7 +712,7 @@ function layout(content) {
   const username = me?.username || 'Your campus awaits';
   const campusName = me?.university || 'NIIT University';
   const inboxCount = state.pendingApplications.length;
-  const currentLabel = nav.find(([key])=>key===state.view)?.[1] || 'Your campus';
+  const currentLabel = state.view === 'reviews' ? 'Review Centre' : nav.find(([key])=>key===state.view)?.[1] || 'Your campus';
   return `
     <div class="shell experience-shell ${state.view === 'chat' ? 'chat-shell' : state.view === 'safety' ? 'safety-shell' : ''}">
       <a class="skip-content" href="#main-content">Skip to content</a>
@@ -932,7 +934,7 @@ function safety() {
       <details name="safety-topics"><summary><span class="safety-control-icon">${icons.chat}</span><span>Something felt wrong?<span class="safety-summary-detail">Report a message for review.</span></span><i aria-hidden="true">＋</i></summary><div class="safety-answer"><p>Open the message’s actions, choose Report, and select a reason. A moderator can review the surrounding conversation and take action.</p><button class="link" onclick="go('chat')">Open campus chat</button></div></details>
       <details name="safety-topics"><summary><span class="safety-control-icon">${icons.safety}</span><span>What verification means<span class="safety-summary-detail">A reviewed account. Not a safety guarantee.</span></span><i aria-hidden="true">＋</i></summary><div class="safety-answer"><p>Verification records that an account has passed the current review process. It does not guarantee someone’s intentions or behaviour. Keep personal details private until you feel comfortable.</p></div></details>
     </section></div>
-    ${cx.safetyLinks()}<footer class="meeting-guide" aria-labelledby="meeting-guide-title"><div><h2 id="meeting-guide-title">Before you meet</h2><p>Keep the first plan simple.</p></div><ol><li><span>01</span><strong>Choose a public spot</strong><p>A café, library, or busy campus space.</p></li><li><span>02</span><strong>Let a friend know</strong><p>Share the place and time with someone you trust.</p></li><li><span>03</span><strong>Keep your options open</strong><p>You can change your mind or leave at any time.</p></li></ol></footer>
+    ${reviewCentre.banner()}${cx.safetyLinks()}<footer class="meeting-guide" aria-labelledby="meeting-guide-title"><div><h2 id="meeting-guide-title">Before you meet</h2><p>Keep the first plan simple.</p></div><ol><li><span>01</span><strong>Choose a public spot</strong><p>A café, library, or busy campus space.</p></li><li><span>02</span><strong>Let a friend know</strong><p>Share the place and time with someone you trust.</p></li><li><span>03</span><strong>Keep your options open</strong><p>You can change your mind or leave at any time.</p></li></ol></footer>
   </section>`);
 }
 
@@ -1115,7 +1117,7 @@ function adminPortal() {
       <section class="admin-header-card">
         <div class="admin-header-left">
 
-          <h1 class="admin-title">Moderation</h1><button class="link" onclick="cx.adminAppeals()">Verification appeals</button>
+          <h1 class="admin-title">Moderation</h1><button class="secondary" onclick="reviewCentre.open(null,true)">Account reviews</button><button class="link" onclick="cx.adminAppeals()">Verification appeals</button>
           <p class="workspace-subtitle">${escapeHtml(me.university || 'NIIT University')} · Review workspace</p>
         </div>
         <div class="admin-header-actions">
@@ -1846,6 +1848,7 @@ window.handleUserModeration = async (userId, action, hours = 24, alias = 'Studen
   } else if (action === 'unban') {
     confirmMsg = `Restore full active standing for ${display}?`;
   }
+  if(['timeout','ban'].includes(action))return reviewCentre.restriction(`/admin/users/${userId}/action`,action,hours);
   if (confirmMsg && !confirm(confirmMsg)) return;
 
   try {
@@ -2110,6 +2113,7 @@ window.submitAdminSelfVerify = async (gender) => {
 };
 
 window.resolveAdminReport = async (reportId, action, hours = 24) => {
+  if(['timeout_user','ban_user'].includes(action))return reviewCentre.restriction(`/admin/reports/${reportId}/action`,action,hours);
   try {
     const res = await api(`/admin/reports/${reportId}/action`, {
       method: 'POST',
@@ -3682,9 +3686,10 @@ function renderPrivateModal() {
 // ── Global Window Handlers ───────────────────────────────────────────────────
 
 window.go = (v, replace = false) => {
+  if(state.me?.restricted)v='reviews';
   dismissReactionPicker();
   // If authenticated but unverified non-admin, restrict to verification onboarding
-  if (state.me && !state.me.isVerified && !state.me.isAdmin && !['verification','auth','safety','settings'].includes(v)) {
+  if (state.me && !state.me.isVerified && !state.me.isAdmin && !['verification','auth','safety','settings','reviews'].includes(v)) {
     v = 'verification';
   }
   if (state.view === v && !replace) return;
@@ -3840,6 +3845,7 @@ window.handleAuthPageVerifyOtp = async e => {
       })
     });
     updateMe(r.user);
+    if(r.user?.restricted){window.closeModal();go('reviews');return;}
     state.authStep = 'welcome';
     state.authOtpSent = false;
     state.authPendingEmail = '';
@@ -3892,6 +3898,7 @@ window.verifyOtp = async (e, email) => {
       body: JSON.stringify({ email: String(email || '').trim().toLowerCase(), code })
     });
     updateMe(r.user);
+    if(r.user?.restricted){window.closeModal();go('reviews');return;}
     closeModal();
     toast(`Welcome, ${r.user.username}`);
     initSocket();
@@ -4283,6 +4290,7 @@ async function loadMe() {
     if (!data.user) throw new Error('Invalid session response');
     updateMe(data.user);
     state.authLoading = false;
+    if(data.user.restricted){state.view='reviews';window.history.replaceState({view:'reviews'},'','/reviews');return;}
     if (state.view === 'auth') {
       const urlView = getViewFromPath(window.location.pathname) || 'home';
       state.view = urlView;
@@ -4292,7 +4300,7 @@ async function loadMe() {
       }
     }
     if (state.me && !state.me.isVerified && !state.me.isAdmin) {
-      if (!['verification','safety','settings'].includes(state.view)) {
+      if (!['verification','safety','settings','reviews'].includes(state.view)) {
         state.view = 'verification';
         try { window.history.replaceState({ view: 'verification' }, '', '/verification'); } catch {}
       }
@@ -4481,11 +4489,13 @@ function setCampusPresence(count) {
 }
 
 function initSocket() {
+  if(state.me?.restricted)return;
   if (socket || !state.me) return;
   const socketUrl = import.meta.env.VITE_API_URL ? new URL(import.meta.env.VITE_API_URL, location.origin).origin : location.origin;
   socket = io(socketUrl, { withCredentials: true });
 
   // The server joins the authenticated user's own campus and account rooms.
+  socket.on('account:restricted', () => { window.closeModal();socket?.disconnect();loadMe(); });
   socket.on('disconnect', () => setCampusPresence(null));
   socket.on('connect_error', () => setCampusPresence(null));
   socket.on('campus:presence', ({ onlineCount }) => setCampusPresence(onlineCount));
@@ -4912,7 +4922,8 @@ function verificationPage() {
 }
 
 const cx = installConnections({state,api,modal,closeModal:()=>window.closeModal(),render,toast:t=>window.toast(t),escapeHtml,avatar,loadDiscover,loadInbox,openComposer});
-const views = { home, discover, chat, inbox, safety, settings, auth: authPage, admin: adminPortal, verification: verificationPage };
+const reviewCentre = installReviewCentre({state,api,layout,render,escapeHtml,icons,modal,closeModal:()=>window.closeModal(),loadMe});
+const views = { reviews:()=>reviewCentre.page(), home, discover, chat, inbox, safety, settings, auth: authPage, admin: adminPortal, verification: verificationPage };
 
 function getViewFromPath(pathname) {
   const clean = String(pathname || '').replace(/^\/+|\/+$/g, '').toLowerCase();
@@ -4938,6 +4949,7 @@ function render() {
     document.querySelector('#retry-startup').addEventListener('click', loadMe);
     return;
   }
+  if(state.me?.restricted)state.view='reviews';
   const currentView = views[state.view] || home;
   const draft = captureComposer(appEl.querySelector('#message'));
   appEl.innerHTML = currentView();
