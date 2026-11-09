@@ -162,6 +162,8 @@ model User {
   revealConsents RevealConsent[]
   reportsFiled   Report[]      @relation("reporter")
   reportsReceived Report[]     @relation("reported_user")
+  accountReviews AccountReview[] @relation("review_owner")
+  assignedReviews AccountReview[] @relation("review_staff")
   moderationActions ModerationAction[] @relation("action_target")
   administeredActions ModerationAction[] @relation("action_admin")
 
@@ -326,6 +328,11 @@ model ModerationAction {
   adminUserId String?              @map("admin_user_id") @db.Uuid
   type        ModerationActionType
   reason      String               @db.VarChar(1000)
+  publicSummary String? @map("public_summary") @db.VarChar(1000)
+  policy String? @db.VarChar(100)
+  evidence Json? // Staff-only snapshot; never serialized to the appellant.
+  liftedAt DateTime? @map("lifted_at") @db.Timestamptz(6)
+  review AccountReview?
   startsAt    DateTime             @default(now()) @map("starts_at") @db.Timestamptz(6)
   endsAt      DateTime?            @map("ends_at") @db.Timestamptz(6)
   createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -392,4 +399,34 @@ model VerificationAppeal {
   reviewer User? @relation("appeal_reviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
   @@index([userId, status])
   @@map("verification_appeals")
+}
+
+model AccountReview {
+  id String @id @default(uuid()) @db.Uuid
+  actionId String @unique @map("action_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  reviewerId String? @map("reviewer_id") @db.Uuid
+  status String @default("submitted") @db.VarChar(30)
+  outcome String? @db.VarChar(30)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  resolvedAt DateTime? @map("resolved_at") @db.Timestamptz(6)
+  reopenedAt DateTime? @map("reopened_at") @db.Timestamptz(6)
+  action ModerationAction @relation(fields: [actionId], references: [id], onDelete: Restrict)
+  user User @relation("review_owner", fields: [userId], references: [id], onDelete: Restrict)
+  reviewer User? @relation("review_staff", fields: [reviewerId], references: [id], onDelete: SetNull)
+  entries ReviewEntry[]
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("account_reviews")
+}
+model ReviewEntry {
+  id String @id @default(uuid()) @db.Uuid
+  reviewId String @map("review_id") @db.Uuid
+  kind String @db.VarChar(30)
+  body String @db.VarChar(4000)
+  attachments Json @default("[]")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  review AccountReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  @@index([reviewId, createdAt])
+  @@map("review_entries")
 }

@@ -16,6 +16,7 @@ const adminReports = require('./admin-reports');
 const redis = require('./redis');
 const connectionPolicy = require('./connection-policy');
 const { registerConnections } = require('./connections');
+const { registerAccountReviews, restrictAccount } = require('./account-reviews');
 const SESSION_COOKIE = process.env.SESSION_COOKIE_NAME || 'session';
 
 const app = express();
@@ -39,6 +40,7 @@ const names = {
 };
 
 app.use((req, res, next) => {
+  if (req.method === 'POST' && /^\/api\/reviews(?:\/|$)/.test(req.path)) return express.json({ limit: '2200kb' })(req,res,next);
   if (req.path === '/api/verify/selfie' || req.originalUrl?.startsWith('/api/verify/selfie')) {
     return express.json({ limit: '5mb' })(req, res, next);
   }
@@ -82,6 +84,7 @@ function publicUser(u) {
     genderLocked: Boolean(u.genderLocked),
     isVerified: Boolean(u.isVerified),
     verificationStatus: u.verificationStatus || 'unverified',
+    restricted: Boolean(accountUnavailable(u)),
     createdAt: u.createdAt
   };
 }
@@ -95,7 +98,7 @@ function hashOtp(email, code) {
 }
 
 function accountUnavailable(user) {
-  return !user || user.accountStatus === 'banned' || (user.suspendedUntil && new Date(user.suspendedUntil) > new Date());
+  return !user || user.accountStatus === 'banned' || (user.accountStatus === 'suspended' && !user.suspendedUntil) || (user.suspendedUntil && new Date(user.suspendedUntil) > new Date());
 }
 
 function validHealthSecret(value) {
@@ -198,17 +201,29 @@ async function deliverWarningEmail(email, { alias, reason, campusName }) {
 }
 
 // Auth middleware — reads Prisma user with campus included on every request.
-async function auth(req, res, next) {
+async function sessionAuth(req, res, next) {
   try {
     const raw = req.cookies[SESSION_COOKIE] || req.headers.authorization?.replace('Bearer ', '');
     const p = jwt.verify(raw, SECRET, { issuer: 'afterclass', audience: 'afterclass-web' });
-    const user = await prisma.user.findUnique({ where: { id: p.sub }, include: { campus: true } });
-    if (accountUnavailable(user) || p.sv !== (user.sessionVersion || 0)) return res.status(401).json({ error: 'Account unavailable' });
+    let user = await prisma.user.findUnique({ where: { id: p.sub }, include: { campus: true } });
+    if (!user || p.sv !== (user.sessionVersion || 0)) return res.status(401).json({ error: 'Account unavailable' });
+    if(user.accountStatus==='suspended' && user.suspendedUntil && user.suspendedUntil<=new Date()){
+      await prisma.user.updateMany({where:{id:user.id,accountStatus:'suspended',suspendedUntil:{lte:new Date()}},data:{accountStatus:'active',suspendedUntil:null}});
+      user=await prisma.user.findUnique({where:{id:user.id},include:{campus:true}});
+    }
     req.user = user;
+    req.restricted = Boolean(accountUnavailable(user));
     next();
   } catch {
     return res.status(401).json({ error: 'Authentication required' });
   }
+}
+
+function auth(req,res,next) {
+  return sessionAuth(req,res,()=>{
+    if(req.restricted)return res.status(403).json({error:'Your account is restricted. Open the Review Centre to request a review.'});
+    next();
+  });
 }
 
 function addAdminToEnvFile(email) {
@@ -372,7 +387,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
   const dbCampus = await prisma.campus.findUnique({ where: { slug: otp.campusId } });
   if (!dbCampus) return res.status(400).json({ error: 'Campus unavailable.' });
   let user = await prisma.user.findUnique({ where: { email }, include: { campus: true } });
-  if (user && accountUnavailable(user)) return res.status(403).json({ error: 'This account is not available.' });
+
   
   const validGenders = ['woman', 'man', 'nonbinary', 'prefer_not_to_say'];
   const reqGender = String(req.body.gender || otp.gender || '');
@@ -660,9 +675,7 @@ app.get('/api/auth/google/callback', async (req, res) => {
 
     // 5. Look up or create student user
     let user = await prisma.user.findUnique({ where: { email }, include: { campus: true } });
-    if (user && accountUnavailable(user)) {
-      return res.redirect(`/?auth_error=${encodeURIComponent('This student account is suspended or unavailable.')}`);
-    }
+
 
     if (!user) {
       const alias = await generateUsername();
@@ -699,7 +712,7 @@ app.get('/api/auth/google/callback', async (req, res) => {
       path: '/'
     });
 
-    res.redirect('/');
+    res.redirect(accountUnavailable(user) ? '/reviews' : '/');
   } catch (err) {
     console.error('Google OAuth callback error:', err);
     res.redirect(`/?auth_error=${encodeURIComponent('An unexpected error occurred during Google sign-in.')}`);
@@ -707,59 +720,24 @@ app.get('/api/auth/google/callback', async (req, res) => {
 });
 
 // Fast Google Sign-In for verified student Google Workspace accounts
-app.post('/api/auth/google-fast', async (req, res) => {
-  const email = String(req.body.email || '').trim().toLowerCase();
-  const campus = campuses.fromEmail(email);
-  if (!campus) return res.status(400).json({ error: 'Please enter a valid university email address.' });
-  const dbCampus = await prisma.campus.findUnique({ where: { slug: campus.id } });
-  if (!dbCampus) return res.status(400).json({ error: 'Campus unavailable.' });
-
-  let user = await prisma.user.findUnique({ where: { email }, include: { campus: true } });
-  if (user && accountUnavailable(user)) return res.status(403).json({ error: 'This account is not available.' });
-
-  const validGenders = ['woman', 'man', 'nonbinary', 'prefer_not_to_say'];
-  const reqGender = String(req.body.gender || '');
-  const userGender = validGenders.includes(reqGender) ? reqGender : 'prefer_not_to_say';
-
-  if (!user) {
-    const alias = await generateUsername();
-    user = await prisma.user.create({
-      data: {
-        email,
-        campusId: dbCampus.id,
-        publicAlias: alias,
-        gender: userGender,
-        orientation: 'prefer_not_to_say',
-        genderPreference: 'any',
-        reputationScore: 100,
-        accountStatus: 'active',
-        sessionVersion: 0,
-        noShowCount: 0,
-        aliases: { create: { alias, rotationReason: 'initial' } }
-      },
-      include: { campus: true }
-    });
-  }
-  res.cookie(SESSION_COOKIE, token(user), { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 2592000000, path: '/' });
-  res.json({ user: publicUser(user) });
-});
+app.post('/api/auth/google-fast', (req,res)=>res.status(410).json({error:'Use verified Google sign-in or your university email code.'}));
 
 // Log out from current device only
-app.post('/api/auth/logout', auth, (req, res) => {
+app.post('/api/auth/logout', sessionAuth, (req, res) => {
   res.clearCookie(SESSION_COOKIE, { path: '/' }).json({ ok: true });
 });
 
 // Log out from all devices globally
-app.post('/api/auth/logout-all', auth, async (req, res) => {
+app.post('/api/auth/logout-all', sessionAuth, async (req, res) => {
   await prisma.user.update({ where: { id: req.user.id }, data: { sessionVersion: (req.user.sessionVersion || 0) + 1 } });
   res.clearCookie(SESSION_COOKIE, { path: '/' }).json({ ok: true, revokedAll: true });
 });
 
-app.get('/api/me', auth, async (req, res) => {
+app.get('/api/me', sessionAuth, async (req, res) => {
   const p = publicUser(req.user);
   if (p) {
     p.email = req.user.email;
-    p.isAdmin = await isAdminUser(req.user);
+    p.isAdmin = !req.restricted && await isAdminUser(req.user);
     try {
       const latestWarning = await prisma.moderationAction.findFirst({
         where: { userId: req.user.id, type: 'warning' },
@@ -877,6 +855,7 @@ function closeConnectionMatch(m) {
   for (const id of [m.userOneId,m.userTwoId]) io.to('user:'+id).emit('match:cancelled', {matchId:m.id});
 }
 registerConnections({app,prisma,auth,requireAdmin,io,closeMatch:closeConnectionMatch});
+registerAccountReviews({app,prisma,sessionAuth,auth,isAdminUser,io,limit:redis.limit});
 
 // Review login is only available with the isolated loopback database and explicit flag.
 app.get('/api/review', (req,res)=>res.json({enabled:reviewMode}));
@@ -1307,28 +1286,17 @@ app.post('/api/admin/reports/:id/action', requireAdmin, async (req, res) => {
     });
     if (!report) return res.status(404).json({ error: 'Report not found.' });
 
+    if(!req.user || report.campusId!==req.user.campusId)return res.status(403).json({error:'Sign in as a moderator for this campus.'});
+    if(['timeout_user','ban_user'].includes(action)){
+      await restrictAccount(prisma,{userId:report.reportedUserId,actor:req.user,action:action==='ban_user'?'ban':'suspension',body:req.body,reportId});
+      io.to('user:'+report.reportedUserId).emit('account:restricted');
+      io.in('user:'+report.reportedUserId).disconnectSockets(true);
+      return res.json({ok:true,action,status:'resolved'});
+    }
+    if(!['dismiss','delete_message'].includes(action))return res.status(400).json({error:'Unknown moderation action.'});
     if (action === 'delete_message' && report.messageId) {
       await prisma.message.delete({ where: { id: report.messageId } }).catch(() => {});
       io.to('campus:' + report.campusId).emit('message:deleted', { messageId: report.messageId });
-    } else if (action === 'timeout_user') {
-      const until = new Date(Date.now() + hours * 3600000);
-      await prisma.user.update({
-        where: { id: report.reportedUserId },
-        data: { suspendedUntil: until, sessionVersion: { increment: 1 } }
-      });
-      if (report.messageId) {
-        await prisma.message.delete({ where: { id: report.messageId } }).catch(() => {});
-        io.to('campus:' + report.campusId).emit('message:deleted', { messageId: report.messageId });
-      }
-    } else if (action === 'ban_user') {
-      await prisma.user.update({
-        where: { id: report.reportedUserId },
-        data: { accountStatus: 'banned', sessionVersion: { increment: 1 } }
-      });
-      if (report.messageId) {
-        await prisma.message.delete({ where: { id: report.messageId } }).catch(() => {});
-        io.to('campus:' + report.campusId).emit('message:deleted', { messageId: report.messageId });
-      }
     }
 
     const newStatus = action === 'dismiss' ? 'dismissed' : 'resolved';
@@ -1340,7 +1308,7 @@ app.post('/api/admin/reports/:id/action', requireAdmin, async (req, res) => {
     res.json({ ok: true, action, status: newStatus });
   } catch (err) {
     console.error('[Admin Report Action Error]:', err);
-    res.status(500).json({ error: 'Moderation action failed.' });
+    res.status(err.status||500).json({ error: err.status?err.message:'Moderation action failed.' });
   }
 });
 
@@ -1352,6 +1320,13 @@ app.post('/api/admin/users/:id/action', requireAdmin, async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: userId }, include: { campus: true } });
     if (!user) return res.status(404).json({ error: 'Student not found.' });
 
+    if(!req.user || user.campusId!==req.user.campusId)return res.status(403).json({error:'Sign in as a moderator for this campus.'});
+    if(['timeout','ban'].includes(action)){
+      await restrictAccount(prisma,{userId,actor:req.user,action:action==='ban'?'ban':'suspension',body:req.body});
+      io.to('user:'+userId).emit('account:restricted');io.in('user:'+userId).disconnectSockets(true);
+      return res.json({ok:true,action,userId});
+    }
+    if(!['warn','unban'].includes(action))return res.status(400).json({error:'Unknown moderation action.'});
     if (action === 'warn') {
       const reason = String(req.body.reason || 'Violation of campus community guidelines — please keep chat interactions respectful.').slice(0, 1000);
       await prisma.moderationAction.create({
@@ -1380,36 +1355,18 @@ app.post('/api/admin/users/:id/action', requireAdmin, async (req, res) => {
           campusName: user.campus?.name
         }).catch(err => console.error('[Warning Email Delivery Error]:', err));
       }
-    } else if (action === 'timeout') {
-      const until = new Date(Date.now() + hours * 3600000);
-      await prisma.user.update({
-        where: { id: userId },
-        data: { accountStatus: 'suspended', suspendedUntil: until, sessionVersion: { increment: 1 } }
-      });
-      await prisma.report.updateMany({
-        where: { reportedUserId: userId, status: 'pending' },
-        data: { status: 'resolved', resolvedAt: new Date() }
-      });
-    } else if (action === 'ban') {
-      await prisma.user.update({
-        where: { id: userId },
-        data: { accountStatus: 'banned', sessionVersion: { increment: 1 } }
-      });
-      await prisma.report.updateMany({
-        where: { reportedUserId: userId, status: 'pending' },
-        data: { status: 'resolved', resolvedAt: new Date() }
-      });
     } else if (action === 'unban') {
-      await prisma.user.update({
-        where: { id: userId },
-        data: { accountStatus: 'active', suspendedUntil: null }
-      });
+      await prisma.$transaction(async tx=>{
+        await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
+        await tx.user.update({where:{id:userId},data:{accountStatus:'active',suspendedUntil:null}});
+        await tx.moderationAction.updateMany({where:{userId,type:{in:['ban','suspension']},liftedAt:null},data:{liftedAt:new Date()}});
+      },{timeout:20000});
     }
 
     res.json({ ok: true, action, userId });
   } catch (err) {
     console.error('[Admin User Action Error]:', err);
-    res.status(500).json({ error: 'User moderation action failed.' });
+    res.status(err.status||500).json({ error: err.status?err.message:'User moderation action failed.' });
   }
 });
 
