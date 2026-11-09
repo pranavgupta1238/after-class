@@ -5,6 +5,7 @@ import './portal.css';
 import './theme.css';
 import './workspace.css';
 import './cards.css';
+import './messaging.css';
 import { createAdminLoader } from './admin-loader.mjs';
 import { ACTIVITIES, activityFor, selectPlans, planTime } from './discovery.mjs';
 import 'leaflet/dist/leaflet.css';
@@ -423,35 +424,39 @@ function renderMessageReactionsHtml(reactions = [], msgId) {
   `;
 }
 
-window.openMessageReactionPicker = (e, msgId) => {
-  e?.stopPropagation?.();
-  document.querySelector('.msg-reaction-picker-popover')?.remove();
-
-  const btn = e.currentTarget;
-  const rect = btn.getBoundingClientRect();
-
+let dismissReactionPicker = () => {};
+window.closeReactionPicker = () => dismissReactionPicker();
+window.openMessageReactionPicker = (event, msgId) => {
+  event?.stopPropagation?.();
+  dismissReactionPicker();
+  const trigger = event.currentTarget;
+  const rect = trigger.getBoundingClientRect();
   const popover = document.createElement('div');
   popover.className = 'msg-reaction-picker-popover';
-  popover.innerHTML = CAMPUS_REACTION_EMOJIS.map(emoji => `
-    <button type="button" class="reaction-picker-item" onclick="toggleMessageReaction('${msgId}', '${emoji}'); document.querySelector('.msg-reaction-picker-popover')?.remove();">
-      ${expressionArt(emoji)}
-    </button>
-  `).join('');
-
-  popover.style.position = 'fixed';
-  popover.style.top = `${Math.max(10, rect.top - 46)}px`;
-  popover.style.left = `${Math.max(12, Math.min(rect.left - 40, window.innerWidth - 300))}px`;
-  popover.style.zIndex = '9999';
-
+  popover.setAttribute('role', 'toolbar');
+  popover.setAttribute('aria-label', 'Choose a reaction');
+  popover.innerHTML = CAMPUS_REACTION_EMOJIS.map(emoji => `<button type="button" class="reaction-picker-item" aria-label="${escapeHtml(EXPRESSIONS.find(item => item.e === emoji)?.n || emoji)}">${expressionArt(emoji)}</button>`).join('');
+  popover.querySelectorAll('button').forEach((button, index) => button.addEventListener('click', () => {
+    window.toggleMessageReaction(msgId, CAMPUS_REACTION_EMOJIS[index]);
+    dismissReactionPicker();
+    if (trigger.isConnected) trigger.focus();
+  }));
   document.body.appendChild(popover);
-
-  const closeHandler = (evt) => {
-    if (!popover.contains(evt.target)) {
-      popover.remove();
-      document.removeEventListener('click', closeHandler);
+  Object.assign(popover.style, { position: 'fixed', zIndex: '9999',
+    left: `${Math.max(12, Math.min(rect.left, innerWidth - popover.offsetWidth - 12))}px`,
+    top: `${Math.max(12, rect.top >= popover.offsetHeight + 16 ? rect.top - popover.offsetHeight - 8 : Math.min(rect.bottom + 8, innerHeight - popover.offsetHeight - 12))}px` });
+  const controller = new AbortController();
+  dismissReactionPicker = () => { controller.abort(); popover.remove(); dismissReactionPicker = () => {}; };
+  document.addEventListener('click', e => { if (!popover.contains(e.target) && !trigger.contains(e.target)) dismissReactionPicker(); }, { signal: controller.signal });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.preventDefault(); dismissReactionPicker(); if (trigger.isConnected) trigger.focus(); }
+    if (popover.contains(document.activeElement) && ['ArrowLeft','ArrowRight'].includes(e.key)) {
+      e.preventDefault(); const buttons = [...popover.querySelectorAll('button')];
+      buttons[(buttons.indexOf(document.activeElement) + (e.key === 'ArrowRight' ? 1 : buttons.length - 1)) % buttons.length].focus();
     }
-  };
-  setTimeout(() => document.addEventListener('click', closeHandler), 10);
+  }, { signal: controller.signal });
+  window.addEventListener('resize', () => dismissReactionPicker(), { signal: controller.signal });
+  popover.querySelector('button')?.focus();
 };
 
 window.toggleMessageReaction = (msgId, emoji) => {
@@ -496,51 +501,36 @@ window.toggleMessageReaction = (msgId, emoji) => {
 
 function renderCampusMessageHtml(m) {
   const name = m.sender?.username || m.senderAlias || 'Anonymous';
-  const parsed = parseMessageContent(m.content || '');
-  const text = parsed.text || '';
-  const replyTo = parsed.replyTo;
+  const { text = '', replyTo } = parseMessageContent(m.content || '');
   const time = m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
-  const isMine = state.me && (name === state.me.username || m.senderId === state.me.id);
-  const msgId = m.id || ('m-' + Math.random().toString(36).slice(2, 8));
-  const safeText = text.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  const safeName = name.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-
-  return `
-    <div class="message-swipe-row" data-msg-id="${msgId}">
-      <div class="swipe-reply-cue">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
-      </div>
-      <div class="message ${isMine ? 'is-mine' : ''}" data-msg-id="${msgId}" data-sender="${safeName}" data-text="${safeText}">
-        ${avatar(name)}
-        <div class="message-content-col">
-          <b>${name}</b><small>${time}${isMine ? ' <span class="tick delivered" title="Delivered">✓✓</span>' : ''}</small>
-          ${replyTo ? `
-            <div class="quoted-reply-box" onclick="scrollToMessage('${replyTo.id}')" title="Jump to original message">
-              <div class="quoted-reply-bar"></div>
-              <div class="quoted-reply-body">
-                <strong class="quoted-reply-sender">${replyTo.sender}</strong>
-                <span class="quoted-reply-text">${formatMessageContent(replyTo.text)}</span>
-              </div>
-            </div>
-          ` : ''}
-          <div class="message-body">${formatMessageContent(text)}</div>
-          ${renderMessageReactionsHtml(m.reactions || [], msgId)}
-        </div>
-        <div class="chat-actions-group">
-          <button type="button" class="react-hover-btn" onclick="openMessageReactionPicker(event, '${msgId}')" title="React with emoji">
-            <span style="font-size:12px;line-height:1;">😀</span>
-            <span>React</span>
-          </button>
-          <button type="button" class="reply-hover-btn" onclick="setReplyTo({ id: '${msgId}', sender: '${name.replace(/'/g, "\\'")}', text: '${text.replace(/'/g, "\\'").slice(0, 120)}' })" title="Reply to message">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
-            <span>Reply</span>
-          </button>
-          ${m.id && !isMine ? `<button type="button" class="report" onclick="reportMessage('${m.id}', '${text.replace(/'/g, "\\'")}')" title="Report message to moderators">Report</button>` : ''}
-        </div>
-      </div>
-    </div>
-  `;
+  const isMine = Boolean(state.me && (m.senderId ? m.senderId === state.me.id : name === state.me.username));
+  const id = escapeHtml(m.id || '');
+  return `<div class="message-swipe-row" data-msg-id="${id}"><div class="swipe-reply-cue" aria-hidden="true">${uiIcon('reply')}</div>
+    <div class="message ${isMine ? 'is-mine' : ''}" data-msg-id="${id}" data-sender="${escapeHtml(name)}" data-text="${escapeHtml(text)}">
+      ${avatar(name)}<div class="message-content-col"><div class="message-meta"><b>${escapeHtml(isMine ? 'You' : name)}</b><time>${time}</time></div>
+      ${replyTo ? `<button class="quoted-reply-box" data-jump-message="${escapeHtml(replyTo.id)}"><span class="quoted-reply-body"><strong class="quoted-reply-sender">${escapeHtml(replyTo.sender)}</strong><span class="quoted-reply-text">${formatMessageContent(replyTo.text)}</span></span></button>` : ''}
+      <div class="message-body">${formatMessageContent(text)}</div>
+      ${renderMessageReactionsHtml(m.reactions || [], id)}
+      <div class="chat-actions-group" role="group" aria-label="Message actions">
+        <button type="button" data-message-action="react" aria-label="React to message" title="React">${uiIcon('smile')}</button>
+        <button type="button" data-message-action="reply" aria-label="Reply to message" title="Reply">${uiIcon('reply')}</button>
+        ${!isMine && m.id ? `<button type="button" data-message-action="report" aria-label="Report message" title="Report">${uiIcon('flag')}</button>` : ''}
+      </div></div>
+    </div></div>`;
 }
+
+document.addEventListener('click', event => {
+  const jump = event.target.closest('[data-jump-message]');
+  if (jump) return window.scrollToMessage(jump.dataset.jumpMessage);
+  const button = event.target.closest('[data-message-action]');
+  if (!button) return;
+  const message = button.closest('.message');
+  if (!message) return;
+  const { msgId: id, sender, text } = message.dataset;
+  if (button.dataset.messageAction === 'react') window.openMessageReactionPicker({ currentTarget: button, stopPropagation() {} }, id);
+  if (button.dataset.messageAction === 'reply') window.setReplyTo({ id, sender, text: text.slice(0, 120) });
+  if (button.dataset.messageAction === 'report') window.reportMessage(id, text);
+});
 
 let mediaTrayTarget = 'campus';
 let mediaTrayActiveCategory = 'all';
@@ -905,7 +895,7 @@ function chat() {
 
           </div>
           <div class="chat-title-actions">
-            <button type="button" class="chat-members-action-btn" onclick="openCampusMembersModal()" title="View who all joined this group">
+            <button type="button" class="chat-members-action-btn" aria-label="Members" onclick="openCampusMembersModal()" title="View who all joined this group">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                 <circle cx="9" cy="7" r="4"></circle>
@@ -914,10 +904,10 @@ function chat() {
               </svg>
               <span>Members</span>
             </button>
-            <button type="button" onclick="openGuidelines()" title="Campus Guidelines">•••</button>
+            <button type="button" onclick="openGuidelines()" aria-label="Community guidelines" title="Community guidelines">•••</button>
           </div>
         </div>
-        <div class="notice">✦ You’re chatting as <b>${username}</b>. Your identity stays private.</div>
+        <div class="notice"><span>${uiIcon('lock')} Chatting as <b>${escapeHtml(username)}</b></span><button onclick="go('safety')">Your privacy</button></div>
         <div class="messages" id="chat-messages">
           ${chatLoadError ? `<div class="chat-access-state chat-load-error" role="status"><h2>Chat couldn’t load.</h2><p>${escapeHtml(chatLoadError)}</p><button class="primary" onclick="retryCampusChat()">Try again</button></div>` : state.messages.length > 0 ? state.messages.map(renderCampusMessageHtml).join('') : (
             !chatInitialized ? `
@@ -967,10 +957,12 @@ function inbox() {
       <button class="${activeTab === 'matches' ? 'active' : ''}" aria-pressed="${activeTab === 'matches'}" onclick="setInboxTab('matches')">Conversations <span class="inbox-tab-count">${state.matches.length}</span></button>
       <button class="${activeTab === 'my-plans' ? 'active' : ''}" aria-pressed="${activeTab === 'my-plans'}" onclick="setInboxTab('my-plans')">Your plans <span class="inbox-tab-count">${currentPlans.length}</span></button>
     </div>
-    ${activeTab === 'matches' ? `
+    ${activeTab === 'matches' ? `<div class="inbox-workspace"><div class="inbox-list-pane"><div class="inbox-list-heading"><h2>Messages</h2><span>${state.matches.length}</span></div>
       ${state.pendingApplications.length ? `<section class="ac-inbox-section"><h2>Invitations to connect <span>${state.pendingApplications.length}</span></h2><div class="ac-conversation-list">${state.pendingApplications.map(a => `<article class="ac-conversation ac-invitation" data-category="${activityFor(a).id}"><div class="ac-conversation-symbol" aria-hidden="true">${uiIcon(activityFor(a).id)}</div><div class="ac-conversation-copy"><h3>${renderExpressions(escapeHtml(a.activity))}</h3><p>Someone would like to join you.</p></div><button class="ac-button ac-button-primary" onclick="acceptApplication('${escapeQuotes(a.id)}')">Accept invitation</button></article>`).join('')}</div></section>` : ''}
       ${state.matches.length ? `<section class="ac-inbox-section"><h2>Your conversations</h2><div class="ac-conversation-list">${state.matches.map(m => `<article class="ac-conversation"><div class="ac-conversation-person">${avatar(m.other?.username || 'Student', false, Boolean(m.other?.isVerified))}</div><div class="ac-conversation-copy"><h3>${escapeHtml(m.other?.username || 'Student')}</h3><p>${renderExpressions(escapeHtml(m.activity || 'Campus plan'))}</p>${m.location ? `<span class="ac-conversation-place">${uiIcon('pin')}${escapeHtml(m.location)}</span>` : ''}</div><button class="ac-button" onclick="openPrivateChat('${escapeQuotes(m.id)}')">Open chat</button></article>`).join('')}</div></section>` : ''}
-      ${!state.matches.length && !state.pendingApplications.length ? planEmpty('A plan. A first hello.', 'Your private conversations start when an invitation is accepted.', `<button class="ac-button ac-button-primary" onclick="go('discover')">Find a plan</button>`, 'chat') : ''}
+      ${!state.matches.length && !state.pendingApplications.length ? `<div class="inbox-list-empty">${uiIcon('inbox')}<strong>No conversations yet</strong><p>Accepted invitations appear here.</p></div>` : ''}
+      <button class="inbox-campus-link" onclick="go('chat')">${uiIcon('people')}<span>Campus chat<small>Open to your campus</small></span></button></div>
+      <section class="inbox-start-pane"><div class="inbox-mark" aria-hidden="true"><span>${uiIcon('chat')}</span><span>${uiIcon('chat')}</span></div><h2>${state.matches.length ? 'Keep the conversation going.' : 'Good company starts here.'}</h2><p>${state.matches.length ? 'Open a conversation to catch up and make your next plan.' : 'Meet over a plan. Stay in touch here.'}</p><button class="ac-button ac-button-primary" onclick="go('discover')">Explore plans</button><div class="inbox-privacy">${uiIcon('lock')} Private chats. Mutual connections.</div></section></div>
     ` : `<section class="ac-plan-history"><div class="plan-history-tabs" role="group" aria-label="Your plan status"><button aria-pressed="${!showPast}" onclick="setInboxPlanFilter('current')">Upcoming <span>${currentPlans.length}</span></button><button aria-pressed="${showPast}" onclick="setInboxPlanFilter('past')">Past plans <span>${pastPlans.length}</span></button></div>
       ${visiblePlans.length ? `<div class="ac-plan-grid">${visiblePlans.map(p => planCard(p, true)).join('')}</div>` : planEmpty(showPast ? 'No past plans yet' : 'Your calendar is open', showPast ? 'Your previous invitations will appear here.' : 'Find some company for your next free hour.')}
     </section>`}`);
@@ -2821,16 +2813,16 @@ window.selectQuickTime = type => {
 
 function openGuidelines() {
   document.body.insertAdjacentHTML('beforeend', modal(`
-
-    <h2>Guidelines for Campus</h2>
-    <div style="font-size: 13px; line-height: 1.6; color: var(--ink); margin: 15px 0;">
-      <p><b>1. Mutual Respect:</b> Harassment, threats, hate speech, or bullying will result in permanent account removal.</p>
-      <p><b>2. Anonymity & Privacy:</b> Do not attempt to de-anonymize, dox, or share another student's real details without their explicit consent.</p>
-      <p><b>3. Public Meetups:</b> All activities should take place in public campus areas (cafeterias, sports centres, libraries).</p>
-      <p><b>4. Reporting:</b> Hover over any message in campus chat to report inappropriate behaviour. Reports are reviewed privately by the moderation team.</p>
+    <div class="dialog-symbol">${uiIcon('shield')}</div>
+    <h2>Community guidelines</h2>
+    <div class="guidelines-list">
+      <section><h3>Respect each other</h3><p>No harassment, threats, hate speech or bullying.</p></section>
+      <section><h3>Keep personal details private</h3><p>Only share someone’s identity or details with their consent.</p></section>
+      <section><h3>Meet in public</h3><p>Choose a café, library or another busy campus space.</p></section>
+      <section><h3>Speak up</h3><p>Use the flag beside a chat message to report a concern. Moderators review reports privately.</p></section>
     </div>
-    <button class="primary wide" onclick="closeModal()">I Understand</button>
-  `));
+    <button class="primary wide" onclick="closeModal()">Got it</button>
+  `, 'guidelines-dialog'));
 }
 
 // ── Campus Group Members Modal ──────────────────────────────────────────────
@@ -2875,7 +2867,7 @@ function renderCampusMembersList(members) {
     const timeAgo = formatMemberTimeAgo(m.lastActiveAt);
     const joined = formatMemberJoinDate(m.joinedAt);
     const displayName = m.username || m.publicAlias || 'Anonymous Student';
-    const safeName = displayName.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const safeName = escapeHtml(displayName);
 
     return `
       <div class="campus-member-row ${m.isOnline ? 'is-online' : ''} ${isMe ? 'is-me' : ''}">
@@ -2884,7 +2876,7 @@ function renderCampusMembersList(members) {
         </div>
         <div class="member-info-col">
           <div class="member-name-row">
-            <strong class="member-alias">${displayName}</strong>
+            <strong class="member-alias">${safeName}</strong>
             ${isMe ? '<span class="member-badge me">You</span>' : ''}
           </div>
           <div class="member-meta-row">
@@ -2897,9 +2889,9 @@ function renderCampusMembersList(members) {
         </div>
         <div class="member-actions-col">
           ${isMe ? `
-            <span class="member-self-tag">You</span>
+
           ` : `
-            <button type="button" class="member-mention-btn" onclick="mentionMemberInChat('${safeName}')" title="Mention ${safeName} in chat">
+            <button type="button" class="member-mention-btn" data-member-mention="${safeName}" onclick="mentionMemberInChat(this.dataset.memberMention)" title="Mention ${safeName} in chat">
               @ Mention
             </button>
           `}
@@ -2915,10 +2907,10 @@ async function openCampusMembersModal() {
       <div class="campus-members-header">
 
         <h2 style="margin: 4px 0 2px; font-size: 22px; display: flex; align-items: center; gap: 8px;">
-          <span>👥</span> <span id="members-modal-title">Campus Members</span>
+          <span id="members-modal-title">Campus members</span>
         </h2>
         <p id="members-modal-subtitle" style="margin: 0 0 12px; font-size: 13px; color: var(--muted);">
-          Students who have joined this campus chat group
+          Students in this campus chat.
         </p>
         <div class="member-search-wrap">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2937,12 +2929,12 @@ async function openCampusMembersModal() {
       </div>
       <div class="campus-members-stats-bar">
         <span class="stats-pill"><i class="live-pulse-dot"></i> <b id="stats-online-count">-</b> online now</span>
-        <span class="stats-pill total">👥 <b id="stats-total-count">-</b> joined members</span>
+        <span class="stats-pill total"><b id="stats-total-count">-</b> members</span>
       </div>
       <div class="campus-members-list-container" id="campus-members-list">
         <div class="members-loading-state">
           <span class="members-spinner"></span>
-          <span>Loading members who joined...</span>
+          <span>Loading members…</span>
         </div>
       </div>
     </div>
@@ -2964,8 +2956,8 @@ async function openCampusMembersModal() {
     const onlineEl = document.getElementById('stats-online-count');
     const totalEl = document.getElementById('stats-total-count');
 
-    if (titleEl) titleEl.textContent = `${data.campusName || 'Campus'} Members`;
-    if (subtitleEl) subtitleEl.textContent = `All verified students joined in ${data.campusName || 'this campus'} (${data.totalCount || 0} members)`;
+    if (titleEl) titleEl.textContent = 'Campus members';
+    if (subtitleEl) subtitleEl.textContent = data.campusName || 'Students in this campus chat.';
     if (onlineEl) onlineEl.textContent = data.onlineCount || 0;
     if (totalEl) totalEl.textContent = data.totalCount || 0;
 
@@ -3731,6 +3723,7 @@ function renderPrivateModal() {
 // ── Global Window Handlers ───────────────────────────────────────────────────
 
 window.go = (v, replace = false) => {
+  dismissReactionPicker();
   // If authenticated but unverified non-admin, restrict to verification onboarding
   if (state.me && !state.me.isVerified && !state.me.isAdmin && v !== 'verification' && v !== 'auth') {
     v = 'verification';
@@ -3970,26 +3963,16 @@ window.logout = async () => {
   }
 };
 
-window.openLogoutAllModal = () => {
+function confirmationDialog({ title, description, note, action, actionLabel, cancelLabel = 'Cancel', icon = 'lock' }) {
   document.querySelector('.modal-backdrop')?.remove();
-  document.body.insertAdjacentHTML('beforeend', modal(`
-    <div style="text-align:left;">
-      <span class="eyebrow" style="color:#d5573e;">SESSION & DEVICE SECURITY</span>
-      <h2 style="font:600 21px 'Playfair Display';margin:6px 0 8px;color:var(--ink);">Sign Out Everywhere?</h2>
-      <p style="font-size:13.5px;color:var(--muted);line-height:1.5;margin-bottom:18px;">
-        This will immediately terminate your active login session across <b>all devices</b> — including library computers, lab PCs, tablets, and phones.
-      </p>
-      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 14px;margin-bottom:20px;">
-        <span style="font-size:12.5px;color:#991b1b;font-weight:600;display:block;">⚠️ Instant Remote Invalidation</span>
-        <small style="color:#b91c1c;font-size:11.5px;display:block;margin-top:2px;">You will need to verify your student email with an OTP to log back in on any device.</small>
-      </div>
-      <div style="display:flex;gap:10px;justify-content:flex-end;">
-        <button class="secondary" onclick="closeModal()" style="font-size:13px;padding:9px 16px;">Cancel</button>
-        <button class="primary" onclick="logoutAllDevices()" style="background:#b91c1c;border-color:#b91c1c;font-size:13px;padding:9px 18px;">Sign Out Everywhere ⚡</button>
-      </div>
-    </div>
-  `));
-};
+  document.body.insertAdjacentHTML('beforeend', modal(`<div class="dialog-symbol" aria-hidden="true">${uiIcon(icon)}</div><h2>${title}</h2><p class="dialog-description">${description}</p>${note ? `<div class="dialog-note">${uiIcon('info')}<span>${note}</span></div>` : ''}<div class="dialog-buttons"><button class="ac-button ac-button-quiet" onclick="closeModal()">${cancelLabel}</button><button class="ac-button dialog-confirm" onclick="${action}">${actionLabel}</button></div>`, 'confirmation-dialog'));
+}
+window.openLogoutAllModal = () => confirmationDialog({
+  title: 'Sign out on all devices?',
+  description: 'This includes the device you’re using now.',
+  note: 'You’ll need your student email to sign in again.',
+  action: 'logoutAllDevices()', actionLabel: 'Sign out everywhere', icon: 'devices'
+});
 
 window.logoutAllDevices = async () => {
   try {
@@ -4002,7 +3985,7 @@ window.logoutAllDevices = async () => {
     state.pendingApplications = [];
     state.view = 'auth';
     if (socket) socket.disconnect();
-    toast('⚡ Signed out of all devices');
+    toast('Signed out of all devices');
     render();
   } catch (err) {
     toast(err.message);
@@ -4177,8 +4160,8 @@ window.renderReplyBar = () => {
     <div class="reply-preview-bar">
       <div class="reply-preview-accent"></div>
       <div class="reply-preview-body">
-        <strong class="reply-preview-sender">Replying to ${state.replyingTo.sender}</strong>
-        <span class="reply-preview-text">${state.replyingTo.text}</span>
+        <strong class="reply-preview-sender">Replying to ${escapeHtml(state.replyingTo.sender)}</strong>
+        <span class="reply-preview-text">${formatMessageContent(state.replyingTo.text)}</span>
       </div>
       <button type="button" class="reply-preview-close" onclick="cancelReply()" title="Cancel reply">✕</button>
     </div>
@@ -4246,14 +4229,14 @@ window.reportMessage = (messageId, snippet = '') => {
   document.querySelector('.modal-backdrop')?.remove();
   document.body.insertAdjacentHTML('beforeend', modal(`
     <div class="report-modal-content">
-      <span class="eyebrow" style="color:#dc2626;">CAMPUS TRUST & SAFETY</span>
-      <h2>Report Message</h2>
-      <p style="font-size:13.5px;color:var(--muted);margin-bottom:14px;">Help keep our campus respectful and safe. Select why this message violates community standards:</p>
+      <div class="dialog-symbol" aria-hidden="true">${uiIcon('flag')}</div>
+      <h2>Report message</h2>
+      <p style="font-size:13.5px;color:var(--muted);margin-bottom:14px;">Choose a reason. Your report goes privately to moderators.</p>
 
       ${snippet ? `
         <div class="flagged-preview-box">
-          <small class="eyebrow">FLAGGED MESSAGE</small>
-          <blockquote>"${snippet}"</blockquote>
+          <small class="eyebrow">Message</small>
+          <blockquote>${escapeHtml(snippet)}</blockquote>
         </div>
       ` : ''}
 
@@ -4262,40 +4245,35 @@ window.reportMessage = (messageId, snippet = '') => {
           <label class="report-reason-item">
             <input type="radio" name="report_reason" value="harassment" checked>
             <div>
-              <strong>🚨 Harassment or Bullying</strong>
-              <small>Targeting, threatening, or intimidating a student.</small>
+              <strong>Harassment or bullying</strong>
             </div>
           </label>
 
           <label class="report-reason-item">
             <input type="radio" name="report_reason" value="inappropriate_content">
             <div>
-              <strong>🔞 Inappropriate / Abusive Content</strong>
-              <small>Explicit, offensive, hateful, or abusive remarks.</small>
+              <strong>Inappropriate content</strong>
             </div>
           </label>
 
           <label class="report-reason-item">
             <input type="radio" name="report_reason" value="privacy_violation">
             <div>
-              <strong>🔒 Doxxing / Privacy Breach</strong>
-              <small>Sharing another student's real identity, phone, or photos.</small>
+              <strong>Privacy breach</strong>
             </div>
           </label>
 
           <label class="report-reason-item">
             <input type="radio" name="report_reason" value="spam">
             <div>
-              <strong>📣 Spam or Promotion</strong>
-              <small>Repetitive messages, selling items, or advertising.</small>
+              <strong>Spam</strong>
             </div>
           </label>
 
           <label class="report-reason-item">
             <input type="radio" name="report_reason" value="other">
             <div>
-              <strong>🚩 Other Safety Concern</strong>
-              <small>Violates campus guidelines or creates an unsafe environment.</small>
+              <strong>Something else</strong>
             </div>
           </label>
         </div>
@@ -4308,11 +4286,11 @@ window.reportMessage = (messageId, snippet = '') => {
 
         <div class="modal-actions" style="margin-top:18px;display:flex;justify-content:flex-end;gap:10px;">
           <button type="button" class="text-btn" onclick="closeModal()">Cancel</button>
-          <button type="submit" class="primary" style="background:#dc2626;border-color:#dc2626;">Submit Report 🚩</button>
+          <button type="submit" class="primary">Send report</button>
         </div>
       </form>
     </div>
-  `));
+  `, 'report-dialog'));
 };
 
 window.submitReportForm = async (e, messageId) => {
@@ -4448,22 +4426,12 @@ window.setInboxTab = tab => {
 
 window.closeMyPlan = planId => {
   const plan = state.myPlans?.find(p => p.id === planId);
-  const planName = plan?.activity || 'this plan';
-
-  document.querySelector('.modal-backdrop')?.remove();
-  document.body.insertAdjacentHTML('beforeend', modal(`
-    <div class="confirm-modal-content">
-      <div class="ac-confirm-icon" aria-hidden="true">${uiIcon('calendar')}</div>
-      <h2>Close this invitation?</h2><p class="ac-confirm-name">${renderExpressions(escapeHtml(planName))}</p>
-      <p style="font-size: 13.5px; color: var(--muted); line-height: 1.5; margin: 8px 0 18px;">
-        It will leave Discover and stop accepting interest. You can make this plan again later.
-      </p>
-      <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 10px;">
-        <button type="button" class="text-btn" onclick="closeModal()">Keep plan</button>
-        <button type="button" class="primary" style="background: #dc2626; border-color: #dc2626;" onclick="confirmClosePlan('${planId}')">Close plan</button>
-      </div>
-    </div>
-  `));
+  if (!plan) return;
+  confirmationDialog({ title: 'Close this invitation?',
+    description: escapeHtml(plan.activity),
+    note: 'It will leave Discover and stop accepting interest. You can make this plan again later.',
+    action: `confirmClosePlan('${escapeQuotes(planId)}')`, actionLabel: 'Close plan', cancelLabel: 'Keep plan', icon: 'calendar'
+  });
 };
 
 window.confirmClosePlan = async planId => {

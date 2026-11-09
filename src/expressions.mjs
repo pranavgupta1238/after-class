@@ -1,5 +1,14 @@
 // Original Afterclass vector artwork. Unicode remains the portable message format.
 const paths = {
+ shield:'M12 2 3 6v6c0 5 9 10 9 10s9-5 9-10V6Z',
+ smile:'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M8 14q4 5 8 0 M8 8v1 M16 8v1',
+ reply:'M9 5 3 11l6 6 M3 11h11a7 7 0 0 1 7 7',
+ flag:'M5 22V3q4-2 7 0t7 0v10q-4 2-7 0t-7 0',
+ lock:'M5 10h14v11H5Z M8 10V6a4 4 0 0 1 8 0v4',
+ devices:'M3 4h15v12H3Z M7 20h6 M10 16v4 M17 10h5v11h-5Z',
+ info:'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M12 11v6 M12 7v.1',
+ inbox:'M3 14 6 4h12l3 10v6H3Z M3 14h5l2 3h4l2-3h5',
+
  pin:'M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z M14 10a2 2 0 1 1-4 0 2 2 0 0 1 4 0',
  people:'M14 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0 M3 21v-3a7 7 0 0 1 14 0v3 M18 4a4 4 0 0 1 0 8 M20 15q3 1 3 6',
  bookmark:'M6 3h12v18l-6-4-6 4Z',
