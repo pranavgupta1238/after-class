@@ -18,6 +18,13 @@ test('isolated review API: privacy, eligibility, meeting lifecycle, blocking and
  const future=()=>new Date(Date.now()+86400000).toISOString();
  let plan,match;
  try{
+  await t.test('review sign-in never leaves the local demo or starts live OTP',async()=>{
+   for(const path of ['/api/auth/google','/api/auth/google/callback?code=unused']){
+    const r=await fetch(base+path,{redirect:'manual'});assert.equal(r.status,302);assert.equal(r.headers.get('location'),'/auth');
+   }
+   const r=await fetch(base+'/api/auth/send-otp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'nobody@example.invalid'})});
+   assert.equal(r.status,409);assert.match((await r.json()).error,/demo account/);
+  });
   await t.test('profiles, age gates and availability expire on the server',async()=>{
    assert.equal((await api(a,'/connections/me','PATCH',profile)).status,200);assert.equal((await api(b,'/connections/me','PATCH',profile)).status,200);
    assert.equal((await api(minor,'/connections/me','PATCH',{...profile,birthDate:new Date(Date.now()-16*365.25*864e5).toISOString().slice(0,10)})).status,400);

@@ -2279,6 +2279,7 @@ window.switchAuthShowcase = function(tab) {
 };
 
 function authPage() {
+  if (cx.isReview()) return cx.reviewEntry();
   const step = state.authStep || (state.authOtpSent ? 'otp' : 'welcome');
   const pendingEmail = state.authPendingEmail || '';
   const selectedGender = state.authSelectedGender || 'prefer_not_to_say';

@@ -5,6 +5,7 @@ const PROMPTS=['My ideal free afternoon','Something I could talk about for hours
 const ACTIVITY={coffee:'Coffee',study:'Study',move:'A walk or a game',play:'Games & downtime'};
 export function installConnections({state,api,modal,closeModal,render,toast,escapeHtml:e,avatar,loadDiscover,loadInbox,openComposer}) {
   let account=null,profile=null,people=[],loaded=false,loading=false,error='',eligible=false,mode='social';
+  let reviewEnabled=import.meta.env.VITE_REVIEW==='1',reviewAccounts=[],reviewError='';
   const busy=new Set();
   const request=(path,options={})=>api(path,{signal:AbortSignal.timeout(10000),...options});
   const send=(path,body,method='POST')=>request(path,{method,body:JSON.stringify(body)});
@@ -70,11 +71,35 @@ export function installConnections({state,api,modal,closeModal,render,toast,esca
   async function adminAppeals(){await run('admin-appeals',async()=>{const data=await request('/connections/admin/appeals');show(`<h2>Verification appeals</h2>${data.appeals.length?data.appeals.map(a=>`<article class="cx-appeal"><header><strong>${e(a.user.publicAlias)}</strong><span class="cx-status">${status(a.status)}</span></header><p>${e(a.reason)}</p>${a.status==='pending'?`<form onsubmit="cx.reviewAppeal(event,'${a.id}')"><label>Decision<select name="status"><option value="resubmit">Invite a new verification</option><option value="upheld">Uphold the decision</option></select></label><label>Explain your decision<textarea name="response" required minlength="5" maxlength="1000" rows="2"></textarea></label><button class="primary">Send response</button></form>`:`<p class="cx-response">${e(a.response||'')}</p>`}</article>`).join(''):'<p class="cx-quiet">No appeals to review.</p>'}`);});}
   async function reviewAppeal(event,id){event.preventDefault();const f=new FormData(event.currentTarget);await run('review-appeal',async()=>{await send('/connections/admin/appeals/'+id,{status:f.get('status'),response:f.get('response')});await adminAppeals();});}
   async function setMode(value){mode=value==='dating'?'dating':'social';state.requests=[];render();await loadDiscover();}
-  const cx={availability,settings,safetyLinks:safety,modes,meetingButton,editProfile,saveProfile,editAvailability,saveAvailability,stopAvailability,viewProfile,startPlan,confirmBlock,block,safety:safetyDialog,unblock,appeal,openMeeting,meetingAction,cancelMeeting,reschedule,saveReschedule,feedback,saveFeedback,adminAppeals,reviewAppeal,setMode,refresh:()=>load(true),mode:()=>mode,eligible:()=>eligible,ensure,
+  const cx={isReview:()=>reviewEnabled,reviewEntry,reviewLogin,loadReview,availability,settings,safetyLinks:safety,modes,meetingButton,editProfile,saveProfile,editAvailability,saveAvailability,stopAvailability,viewProfile,startPlan,confirmBlock,block,safety:safetyDialog,unblock,appeal,openMeeting,meetingAction,cancelMeeting,reschedule,saveReschedule,feedback,saveFeedback,adminAppeals,reviewAppeal,setMode,refresh:()=>load(true),mode:()=>mode,eligible:()=>eligible,ensure,
     composerMode:()=>`<label>Connection<select id="plan-mode"><option value="social" ${mode==='social'?'selected':''}>Campus plan</option><option value="dating" ${mode==='dating'?'selected':''} ${!eligible?'disabled':''}>Date · 18+</option></select></label>`};
   window.cx=cx;
   setInterval(async()=>{if(!document.querySelector('#cx-availability')||document.hidden)return;const id=state.me?.id;try{const data=await request('/connections/available');if(id===state.me?.id)people=data.people||[];}catch{/* Keep the last result until it expires. */}const target=document.querySelector('#cx-availability');if(target)target.outerHTML=availability();},30000);
-  // The review entry point only exists on the isolated review server.
-  request('/review').then(async data=>{if(!data.enabled)return;const {accounts}=await request('/review/accounts');const bar=document.createElement('div');bar.className='cx-review-bar';bar.innerHTML=`<strong>Review build</strong><span>Local demo accounts · no real users</span><select aria-label="Switch demo account"><option value="">Choose a demo account</option>${accounts.map(a=>`<option value="${e(a.id)}" ${a.id===state.me?.id?'selected':''}>${e(a.publicAlias)} · ${a.gender}${a.isVerified?'':' · appeal'}</option>`).join('')}</select>`;bar.querySelector('select').addEventListener('change',async event=>{if(!event.target.value)return;await send('/review/login',{id:event.target.value});localStorage.clear();sessionStorage.clear();location.assign('/');});document.body.prepend(bar);document.body.classList.add('cx-review');}).catch(()=>{});
+  // The API guard, not this UI flag, authorizes the isolated demo sessions.
+  async function loadReview(){
+    try {
+      const data=await request('/review');if(!data.enabled){if(reviewEnabled){reviewError='The demo server is unavailable. Restart npm run review.';render();}return;}
+      reviewEnabled=true;reviewError='';
+      const result=await request('/review/accounts');reviewAccounts=result.accounts;
+      document.querySelector('.cx-review-bar')?.remove();
+      const bar=document.createElement('div');bar.className='cx-review-bar';
+      bar.innerHTML=`<strong>Review build</strong><span>Local demo accounts · no real users</span><select aria-label="Switch demo account"><option value="">Choose a demo account</option>${reviewAccounts.map(a=>`<option value="${e(a.id)}" ${a.id===state.me?.id?'selected':''}>${e(a.publicAlias)} · ${a.gender}${a.isVerified?'':' · appeal'}</option>`).join('')}</select>`;
+      bar.querySelector('select').addEventListener('change',event=>{if(event.target.value)reviewLogin(event.target.value);});
+      document.body.prepend(bar);document.body.classList.add('cx-review');render();
+    }catch(err){reviewError='Demo accounts could not load. Please try again.';if(reviewEnabled)render();}
+  }
+  function reviewEntry(){
+    const descriptions={CalmClover:'Start here · meetings and moderation',VelvetWillow:'Respond to a meeting or dating invitation',SunnyFox:'Explore plans and profile preferences',DaringMoon:'Try availability and campus plans',AmberRobin:'Check the under-18 dating restriction',MossyHeron:'Review a declined verification and appeal'};
+    return `<main class="cx-review-entry"><a href="/" class="cx-review-brand">afterclass.</a><section><h1>Try what’s new.</h1><p>Choose a demo account to explore availability, dating and meeting plans. No email or Google sign-in needed.</p><div class="cx-demo-accounts">${reviewAccounts.map(a=>`<button class="cx-demo-account" data-review-login onclick="cx.reviewLogin('${e(a.id)}')">${avatar(a.publicAlias,false,a.isVerified)}<span><strong>Enter as ${e(a.publicAlias)}</strong><small>${e(descriptions[a.publicAlias]||'Explore the review build')}</small></span></button>`).join('')}</div>${reviewError?`<p role="alert">${e(reviewError)}</p>${button('Try again','cx.loadReview()')}`:!reviewAccounts.length?'<p role="status">Loading demo accounts…</p>':''}<p class="cx-review-note">You’re using a separate local demo. Your real account and campus data are unchanged.</p></section></main>`;
+  }
+  async function reviewLogin(id){
+    if(!reviewAccounts.some(a=>a.id===id))return;
+    await run('review-login',async()=>{
+      document.querySelectorAll('[data-review-login],.cx-review-bar select').forEach(el=>el.disabled=true);
+      try{await send('/review/login',{id});localStorage.clear();sessionStorage.clear();location.replace('/home');}
+      catch(err){document.querySelectorAll('[data-review-login],.cx-review-bar select').forEach(el=>el.disabled=false);throw err;}
+    });
+  }
+  loadReview();
   return cx;
 }

@@ -24,6 +24,7 @@ const io = new Server(server, { cors: { origin: process.env.CLIENT_URL || 'http:
 
 const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || '0.0.0.0';
+const reviewMode = process.env.AFTERCLASS_REVIEW === '1' && process.env.NODE_ENV !== 'production' && HOST === '127.0.0.1' && /^postgresql:\/\/[^@]+@127\.0\.0\.1:55432\/afterclass_review$/.test(process.env.DATABASE_URL || '');
 const SECRET = process.env.JWT_SECRET || 'local-development-secret-change-me';
 const OTP_PEPPER = process.env.OTP_PEPPER || SECRET;
 
@@ -335,6 +336,14 @@ app.get('/health', async (req, res) => {
 });
 
 // ── Auth ────────────────────────────────────────────────────────────────────
+
+// The isolated review build uses only seeded demo sessions, never live OAuth or OTP.
+app.use('/api/auth', (req,res,next)=>{
+  if(!reviewMode || ['/logout','/logout-all'].includes(req.path))return next();
+  res.set('Cache-Control','no-store');
+  if(req.method==='GET')return res.redirect('/auth');
+  return res.status(409).json({error:'Choose a demo account on the review sign-in page.'});
+});
 
 app.post('/api/auth/send-otp', async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
@@ -870,7 +879,6 @@ function closeConnectionMatch(m) {
 registerConnections({app,prisma,auth,requireAdmin,io,closeMatch:closeConnectionMatch});
 
 // Review login is only available with the isolated loopback database and explicit flag.
-const reviewMode = process.env.AFTERCLASS_REVIEW === '1' && process.env.NODE_ENV !== 'production' && HOST === '127.0.0.1' && /^postgresql:\/\/[^@]+@127\.0\.0\.1:55432\/afterclass_review$/.test(process.env.DATABASE_URL || '');
 app.get('/api/review', (req,res)=>res.json({enabled:reviewMode}));
 if(reviewMode) {
   app.get('/api/review/accounts',async(req,res)=>res.json({accounts:await prisma.user.findMany({where:{email:{endsWith:'@review.invalid'}},select:{id:true,publicAlias:true,gender:true,isVerified:true}})}));

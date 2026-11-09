@@ -28,7 +28,7 @@ Start Docker Desktop, then run:
 npm run review
 ```
 
-Open **http://127.0.0.1:3003** and choose a demo account from the top bar. This command
+Open **http://127.0.0.1:3003** and click **Enter as CalmClover** on the demo sign-in screen. Use the top bar to switch accounts afterward. Regular Google and email sign-in are disabled on this isolated server. This command
 creates/starts `afterclass-review-db` on loopback port 55432, applies migrations only to
 `afterclass_review`, seeds demo accounts, builds `dist-review`, and starts a separate server.
 It overrides the app's database, Redis, email, cookie, and frontend API configuration; it

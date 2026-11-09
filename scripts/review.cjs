@@ -3,7 +3,7 @@ const {spawnSync,spawn}=require('node:child_process');
 const path=require('node:path');
 const root=path.resolve(__dirname,'..');
 const url='postgresql://postgres:afterclass_local_review@127.0.0.1:55432/afterclass_review';
-const env={...process.env,AFTERCLASS_REVIEW:'1',VITE_API_URL:'/api',DATABASE_URL:url,DIRECT_URL:url,REDIS_URL:'',RESEND_API_KEY:'',NODE_ENV:'development',HOST:'127.0.0.1',PORT:'3003',CLIENT_URL:'http://127.0.0.1:3003',JWT_SECRET:'isolated-afterclass-review-only',SESSION_COOKIE_NAME:'afterclass_review',ADMIN_EMAILS:'admin@review.invalid',ADMIN_KEY:'',STATIC_DIR:'dist-review'};
+const env={...process.env,AFTERCLASS_REVIEW:'1',VITE_API_URL:'/api',VITE_REVIEW:'1',GOOGLE_CLIENT_ID:'',GOOGLE_CLIENT_SECRET:'',GOOGLE_REDIRECT_URI:'',DATABASE_URL:url,DIRECT_URL:url,REDIS_URL:'',RESEND_API_KEY:'',NODE_ENV:'development',HOST:'127.0.0.1',PORT:'3003',CLIENT_URL:'http://127.0.0.1:3003',JWT_SECRET:'isolated-afterclass-review-only',SESSION_COOKIE_NAME:'afterclass_review',ADMIN_EMAILS:'admin@review.invalid',ADMIN_KEY:'',STATIC_DIR:'dist-review'};
 function run(command,args){const r=spawnSync(command,args,{cwd:root,env,stdio:'inherit'});if(r.error||r.status!==0){console.error(r.error?.message||command+' failed');process.exit(r.status||1);}}
 async function seed(){
   process.env.DATABASE_URL=url;process.env.DIRECT_URL=url;
