@@ -5,7 +5,7 @@ const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}(-[0-9a-f]{4}){3
 const include = {slot:true,review:{include:{action:true}},participants:true};
 const unavailable = u => !u || u.accountStatus==='banned' || (u.accountStatus==='suspended'&&!u.suspendedUntil) || u.suspendedUntil>new Date();
 
-function registerHearings({app,prisma,sessionAuth,isAdminUser,limit}) {
+function registerHearings({app,prisma,sessionAuth,isAdminUser,limit,auditAdmin}) {
  const changes = new EventEmitter(); changes.setMaxListeners(200);
  const signal = id => changes.emit(id);
  async function isJudge(user) { return !unavailable(user) && await isAdminUser(user); }
@@ -41,6 +41,7 @@ function registerHearings({app,prisma,sessionAuth,isAdminUser,limit}) {
    try {
     if(req.params.id&&!uuid(req.params.id))p.fail('Invalid ID.');
     if(method!=='get'&&!await limit('hearing:'+req.user.id,120,60000))p.fail('Please slow down and try again.',429);
+    if(!path.endsWith('/events')&&!path.endsWith('/presence')&&await isJudge(req.user)){req.adminCampusId=req.user.campusId;await auditAdmin?.(req,res);}
     await handler(req,res);
    } catch(e) {const conflict=['P2002','P2034'].includes(e.code);if(!e.status&&!conflict)console.error('[Hearings]',e.code||e.message);res.status(e.status||(conflict?409:500)).json({error:e.status?e.message:conflict?'This appointment changed. Refresh and choose again.':'Unable to complete this hearing request. Please try again.'});}
   });

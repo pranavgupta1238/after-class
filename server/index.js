@@ -31,6 +31,8 @@ const SECRET = process.env.JWT_SECRET || 'local-development-secret-change-me';
 const OTP_PEPPER = process.env.OTP_PEPPER || SECRET;
 
 const prisma = new PrismaClient();
+const operations = require('./admin-operations').createOperations(prisma);
+app.use(operations.monitor);
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const reactions = require('./reactions');
 const { getCampusOnlineUserIds, canJoinIdentityRoom } = require('./presence');
@@ -303,6 +305,7 @@ async function requireAdmin(req, res, next) {
       if(!await prisma.campus.findUnique({where:{id:selected},select:{id:true}}))return res.status(404).json({error:'College not found.'});
       req.adminCampusId=selected;
       res.set('Cache-Control','no-store');
+      await operations.audit(req,res);
       next();
     }catch(error){res.status(503).json({error:'Unable to verify administrator access. Please retry.'});}
   });
@@ -864,8 +867,8 @@ function closeConnectionMatch(m) {
   for (const id of [m.userOneId,m.userTwoId]) io.to('user:'+id).emit('match:cancelled', {matchId:m.id});
 }
 registerConnections({app,prisma,auth,requireAdmin,io,closeMatch:closeConnectionMatch});
-const hearingService=registerHearings({app,prisma,sessionAuth,isAdminUser,limit:redis.limit});
-registerAccountReviews({app,prisma,sessionAuth,auth,isAdminUser,io,limit:redis.limit,hearingService});
+const hearingService=registerHearings({app,prisma,sessionAuth,isAdminUser,limit:redis.limit,auditAdmin:operations.audit});
+registerAccountReviews({app,prisma,sessionAuth,auth,isAdminUser,io,limit:redis.limit,hearingService,auditAdmin:operations.audit});
 
 // Review login is only available with the isolated loopback database and explicit flag.
 app.get('/api/review', (req,res)=>res.json({enabled:reviewMode}));
@@ -1257,6 +1260,8 @@ app.post('/api/reports', auth, async (req, res) => {
     res.status(500).json({error:'Could not send your report. Please try again.'});
   }
 });
+
+operations.register({app,auth,requireAdmin,isAdminUser,redis});
 
 app.get('/api/admin/analytics',requireAdmin,async(req,res)=>{
   try{

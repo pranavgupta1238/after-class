@@ -21,9 +21,9 @@ async function restrictAccount(prisma,{userId,actor,action,body,reportId}){
   return record;
  },{timeout:20000});
 }
-function registerAccountReviews({app,prisma,sessionAuth,auth,isAdminUser,io,limit,hearingService}){
+function registerAccountReviews({app,prisma,sessionAuth,auth,isAdminUser,io,limit,hearingService,auditAdmin}){
  const guardAdmin=(req,res,next)=>auth(req,res,async()=>{
-  try{if(!await isAdminUser(req.user))return res.status(403).json({error:'Moderator access required.'});next();}catch{res.status(503).json({error:'Please try again.'});}
+  try{if(!await isAdminUser(req.user))return res.status(403).json({error:'Moderator access required.'});req.adminCampusId=req.user.campusId;await auditAdmin?.(req,res);next();}catch{res.status(503).json({error:'Please try again.'});}
  });
  const route=(method,path,guard,handler)=>app[method](path,guard,async(req,res)=>{
   res.set('Cache-Control','no-store');
