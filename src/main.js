@@ -1,3 +1,4 @@
+import { installStaffWorkspace } from './staff-workspace.js';
 import { installAdminInsights } from './admin-insights.js';
 import { installHearings } from './hearings.js';
 import { installReviewCentre } from './review-centre.js';
@@ -216,6 +217,7 @@ async function api(path, options = {}) {
     data = { error: text || `Request failed (${r.status})` };
   }
   if (!r.ok) {
+    if(data.code==='STAFF_AUTH_REQUIRED')window.staffWorkspace?.unlock();
     const err = new Error(data.error || 'Something went wrong');
     err.status = r.status;
     throw err;
@@ -723,23 +725,24 @@ window.dismissWarningNotice = () => {
 function layout(content) {
   const me = state.me;
   const nav = [['home','Home','Home'],['discover','Discover','Explore'],['chat','Campus chat','Chat'],['inbox','Inbox','Inbox'],['safety','Trust & safety','Safety'],['settings','Settings','You']];
-  if (me?.isAdmin) nav.push(['admin',me.isPlatformAdmin?'Administration':'Moderation','Admin']);
+  const staffView=me?.isAdmin&&state.view==='admin';
+  const staffTab = key => state.adminScreen === key ? 'class="active" aria-current="page"' : '';
   const username = me?.username || 'Your campus awaits';
   const campusName = me?.university || 'NIIT University';
   const inboxCount = state.pendingApplications.length;
-  const currentLabel = state.view === 'hearings' ? 'Hearings' : state.view === 'reviews' ? 'Review Centre' : nav.find(([key])=>key===state.view)?.[1] || 'Your campus';
+  const currentLabel = staffView ? 'Staff workspace' : state.view === 'hearings' ? 'Hearings' : state.view === 'reviews' ? 'Review Centre' : nav.find(([key])=>key===state.view)?.[1] || 'Your campus';
   return `
-    <div class="shell experience-shell ${state.view === 'chat' ? 'chat-shell' : state.view === 'safety' ? 'safety-shell' : ''}">
+    <div class="shell experience-shell ${staffView?'staff-shell':''} ${state.view === 'chat' ? 'chat-shell' : state.view === 'safety' ? 'safety-shell' : ''}">
       <a class="skip-content" href="#main-content">Skip to content</a>
       <aside class="experience-sidebar">
         <a class="brand" href="/" onclick="event.preventDefault();go('home')"><i>✦</i> afterclass<span class="brand-period">.</span></a>
-        <div class="campus"><b>${escapeHtml(campusName)}</b></div>
-        <nav aria-label="Main navigation">${nav.map(([key,label,mobile])=>`<button type="button" data-nav="${key}" class="${state.view===key?'active':''}" ${state.view===key?'aria-current="page"':''} aria-label="${label}" onclick="go('${key}')"><span class="nav-icon" aria-hidden="true">${icons[key]||'◈'}</span><span class="nav-label">${label}</span><span class="nav-mobile-label">${mobile}</span>${key==='inbox'&&inboxCount?`<em aria-label="${inboxCount} incoming interests">${inboxCount}</em>`:''}</button>`).join('')}</nav>
+        <div class="campus"><b>${staffView?'Administration':escapeHtml(campusName)}</b>${staffView?`<small>${escapeHtml(state.adminCampusName||campusName)}</small>`:''}</div>${me?.isAdmin&&!staffView?'<button class="staff-entry" onclick="go(\'admin\')">Staff workspace</button>':''}
+        ${staffView?`<nav aria-label="Staff navigation"><button ${staffTab('analytics')} onclick="adminInsights.open(null,null,'analytics')">Dashboard</button>${me.isPlatformAdmin?`<button ${staffTab('colleges')} onclick="adminInsights.open(null,null,'colleges')">Colleges</button>`:''}<button ${staffTab('moderation')} onclick="staffWorkspace.moderation()">Moderation</button><button ${staffTab('pilot')} onclick="staffWorkspace.open('pilot')">Campus pilot</button>${me.isPlatformAdmin?`<button ${staffTab('reliability')} onclick="staffWorkspace.open('reliability')">Reliability & alerts</button>`:''}<button onclick="go('hearings')">Hearings</button><button onclick="go('home')">Back to Afterclass</button></nav>`:`<nav aria-label="Main navigation">${nav.map(([key,label,mobile])=>`<button type="button" data-nav="${key}" class="${state.view===key?'active':''}" ${state.view===key?'aria-current="page"':''} aria-label="${label}" onclick="go('${key}')"><span class="nav-icon" aria-hidden="true">${icons[key]||'◈'}</span><span class="nav-label">${label}</span><span class="nav-mobile-label">${mobile}</span>${key==='inbox'&&inboxCount?`<em aria-label="${inboxCount} incoming interests">${inboxCount}</em>`:''}</button>`).join('')}</nav>`}
 
         <button class="sidebar-bottom" onclick="${me?'openAvatarPreview()':"go('auth')"}" aria-label="${me?'Open your profile':'Join your campus'}">${avatar(me?.avatarConfig||username,false,Boolean(me?.isVerified))}<span class="sidebar-profile-copy"><strong>${escapeHtml(username)}</strong><small>${me?(me.isVerified?'Verified student': 'Student profile'):'Sign in to get started'}</small></span></button>
       </aside>
       <main id="main-content" tabindex="-1" class="${state.view==='chat'?'chat-main':state.view==='safety'?'safety-main':''}">
-        <div class="experience-toolbar"><div class="toolbar-location"><span class="toolbar-symbol" aria-hidden="true">✳</span><span>${currentLabel}</span></div><a class="mobile-wordmark" href="/" onclick="event.preventDefault();go('home')">✦ afterclass<span>.</span></a><div class="toolbar-actions">${window.hearings?.nav()||''}<button class="toolbar-safety" aria-label="Trust and safety" onclick="go('safety')">${icons.safety}</button><button class="toolbar-create" aria-label="Create a plan" onclick="openComposer()"><span aria-hidden="true">＋</span><span class="toolbar-create-label">New plan</span></button><button class="toolbar-profile" aria-label="Open your profile" onclick="${me?'openAvatarPreview()':"go('auth')"}">${avatar(me?.avatarConfig||username,true,Boolean(me?.isVerified))}</button></div></div>
+        <div class="experience-toolbar">${staffView?`<div class="toolbar-location"><span class="toolbar-symbol" aria-hidden="true">✳</span><span>Staff workspace</span></div><div class="staff-controls"><button class="secondary" onclick="staffWorkspace.unlock()">Staff security</button><button class="secondary" onclick="staffWorkspace.lock()">Lock workspace</button></div>`:`<div class="toolbar-location"><span class="toolbar-symbol" aria-hidden="true">✳</span><span>${currentLabel}</span></div><a class="mobile-wordmark" href="/" onclick="event.preventDefault();go('home')">✦ afterclass<span>.</span></a>${me?.isAdmin?'<button class="mobile-staff-entry" onclick="go(\'admin\')">Staff</button>':''}<div class="toolbar-actions">${window.hearings?.nav()||''}<button class="toolbar-safety" aria-label="Trust and safety" onclick="go('safety')">${icons.safety}</button><button class="toolbar-create" aria-label="Create a plan" onclick="openComposer()"><span aria-hidden="true">＋</span><span class="toolbar-create-label">New plan</span></button><button class="toolbar-profile" aria-label="Open your profile" onclick="${me?'openAvatarPreview()':"go('auth')"}">${avatar(me?.avatarConfig||username,true,Boolean(me?.isVerified))}</button></div>`}</div>
         ${renderWarnedStudentBanner()}${content}
       </main>
     </div><div id="toast" role="status" aria-live="polite" class="toast ${state.toast?'show':''}">${escapeHtml(state.toast)}</div>`;
@@ -768,7 +771,7 @@ function home() {
   ];
   return layout(`<div class="social-home">
     <section class="social-heading"><div><span class="social-dateline">${new Date().toLocaleDateString([], {weekday:'long',day:'numeric',month:'long'})}</span><h1>Make time<br>for <em>someone.</em></h1></div><div class="social-intro"><p>A free hour is a good place to start.</p><button class="primary" onclick="openComposer()">Create a plan</button></div></section>
-    ${cx.availability()}
+    ${cx.reminders()}${cx.availability()}
     <section class="social-intentions" aria-label="Plan ideas">${ideas.map((idea,i)=>`<button class="social-idea social-idea-${idea.id}" onclick="startHomePlan('${idea.id}')"><div class="social-idea-top"><span>${idea.duration}</span><span class="idea-number">0${i+1}</span></div><div class="social-idea-art" aria-hidden="true">${uiIcon(idea.id)}</div><h2>${idea.title}</h2><p>${idea.detail}</p><span class="idea-action">Make this plan</span></button>`).join('')}</section>
     <div class="social-bottom"><section class="social-feed"><div class="social-feed-heading"><h2>Find your company</h2><div class="availability-tabs" role="group" aria-label="When are you free">${[['today','Today'],['tomorrow','Tomorrow'],['week','This week']].map(([v,l])=>`<button aria-pressed="${homeWhen===v}" onclick="setHomeWhen('${v}')">${l}</button>`).join('')}</div></div>
     <div class="request-grid campus-plan-grid">${planLoadState() || (plans.length?plans.slice(0,2).map(card).join(''):`<div class="social-empty"><span aria-hidden="true">${uiIcon('calendar')}</span><div><h3>No plans ${homeWhen==='week'?'this week':homeWhen}</h3><p>Be the first to put something on the calendar.</p></div><button class="link" onclick="openComposer()">Add yours</button></div>`)}</div>${plans.length?'<button class="social-view-all" onclick="exploreHomePlans()">View matching plans</button>':''}</section>
@@ -973,6 +976,7 @@ function adminPortal() {
     `);
   }
 
+  if(['pilot','reliability'].includes(state.adminScreen))return window.staffWorkspace.page();
   if(window.adminInsights.screen()!=='moderation')return window.adminInsights.page();
   const tab = state.adminTab || 'reports';
   const filter = state.adminFilter || 'pending';
@@ -2080,55 +2084,6 @@ window.openPhotoEnlarge = (url) => {
     </div>
   `);
   document.body.insertAdjacentHTML('beforeend', modalHtml);
-};
-
-window.handleAdminSelfVerify = () => {
-  const curGender = state.me?.gender || 'prefer_not_to_say';
-  const modalHtml = modal(`
-    <div class="admin-self-verify-modal" style="text-align:center;max-width:460px;margin:0 auto;">
-      <span class="eyebrow" style="color:#0284c7;">PRIVILEGED STAFF ACTION</span>
-      <h2 style="font:600 22px 'Playfair Display';margin:6px 0 4px;">Admin Instant Verification</h2>
-      <p style="font-size:12.5px;color:var(--muted);margin:0 0 20px;">
-        Choose your gender to instantly authenticate your administrator profile with a permanent <b>Verified Student 🛡️✓</b> badge.
-      </p>
-
-      <div class="admin-gender-options-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;">
-        <button type="button" class="admin-gender-card-btn ${curGender === 'man' ? 'selected' : ''}" onclick="submitAdminSelfVerify('man')">
-          <span style="font-size:36px;display:block;margin-bottom:8px;line-height:1;">👨</span>
-          <strong style="font-size:14px;display:block;margin-bottom:2px;">Man</strong>
-          <small style="font-size:11px;color:var(--muted);">Male Profile</small>
-        </button>
-        <button type="button" class="admin-gender-card-btn ${curGender === 'woman' ? 'selected' : ''}" onclick="submitAdminSelfVerify('woman')">
-          <span style="font-size:36px;display:block;margin-bottom:8px;line-height:1;">👩</span>
-          <strong style="font-size:14px;display:block;margin-bottom:2px;">Woman</strong>
-          <small style="font-size:11px;color:var(--muted);">Female Profile</small>
-        </button>
-        <button type="button" class="admin-gender-card-btn ${curGender === 'nonbinary' ? 'selected' : ''}" onclick="submitAdminSelfVerify('nonbinary')">
-          <span style="font-size:36px;display:block;margin-bottom:8px;line-height:1;">🧑</span>
-          <strong style="font-size:14px;display:block;margin-bottom:2px;">Non-binary</strong>
-          <small style="font-size:11px;color:var(--muted);">Inclusive Profile</small>
-        </button>
-      </div>
-
-      <button type="button" class="secondary" onclick="closeModal()" style="padding:9px 20px;font-size:13px;">Cancel</button>
-    </div>
-  `);
-  document.body.insertAdjacentHTML('beforeend', modalHtml);
-};
-
-window.submitAdminSelfVerify = async (gender) => {
-  try {
-    const res = await api('/admin/self-verify', {
-      method: 'POST',
-      body: JSON.stringify({ gender })
-    });
-    if (res.user) updateMe({ ...state.me, ...res.user });
-    closeModal();
-    toast('✓ Admin profile authenticated & verified! 🛡️');
-    render();
-  } catch (err) {
-    toast(err.message || 'Self-verification failed.');
-  }
 };
 
 window.resolveAdminReport = async (reportId, action, hours = 24) => {
@@ -3778,7 +3733,6 @@ window.filterCampusMembers = filterCampusMembers;
 window.mentionMemberInChat = mentionMemberInChat;
 window.openVerificationModal = openVerificationModal;
 window.captureAndSubmitVerification = captureAndSubmitVerification;
-window.submitAdminSelfVerify = submitAdminSelfVerify;
 window.submitRejectionReason = submitRejectionReason;
 
 window.openAuth = (defaultEmail = '') => {
@@ -4890,11 +4844,7 @@ function verificationPage() {
               <button type="button" class="secondary" onclick="openVerificationModal()" style="padding:11px 20px;font-size:13.5px;background:#fff;">
                 📸 Resubmit Selfie
               </button>
-              ${me?.isAdmin ? `
-                <button type="button" class="secondary" onclick="go('admin')" style="padding:11px 20px;font-size:13.5px;color:#d97706;border-color:#fcd34d;background:#fff;">
-                  ⚡ Open Admin Queue
-                </button>
-              ` : ''}
+
             </div>
           ` : (isRejected ? `
             <div style="width:68px;height:68px;border-radius:50%;background:#fee2e2;color:#dc2626;display:grid;place-items:center;font-size:32px;margin:0 auto 16px;">
@@ -4924,18 +4874,12 @@ function verificationPage() {
             <button type="button" class="primary" onclick="openVerificationModal()" style="padding:13px 34px;font-size:14.5px;font-weight:700;">
               📸 Start Live Face Check (~5s)
             </button>
-            ${me?.isAdmin ? `
-              <div style="margin-top:14px;">
-                <button type="button" class="admin-btn-secondary" onclick="handleAdminSelfVerify()" style="padding:8px 14px;font-size:11.5px;background:#0f172a;color:#38bdf8;border:1px solid #38bdf8;border-radius:8px;cursor:pointer;">
-                  ⚡ Admin Bypass (Skip Verification)
-                </button>
-              </div>
-            ` : ''}
+
           `)}
         </div>
 
         <div style="text-align:center;margin-top:20px;color:var(--muted);font-size:12px;">
-          🔒 Zero permanent storage · Photos are deleted immediately upon verification
+          Photos are deleted after review or by the scheduled expiry cleanup (up to 30 hours).
         </div>
       </main>
     </div>
@@ -4943,6 +4887,7 @@ function verificationPage() {
   `;
 }
 
+const staffWorkspace=installStaffWorkspace({api,state,render,layout,escapeHtml});
 const adminInsights=installAdminInsights({state,api,render,layout,escapeHtml,resetWorkspace:()=>{adminLoader.reset();contextLoader.reset();Object.assign(state,{adminLoads:{},adminContexts:{},adminReports:[],adminModerators:[],adminPrimaryAdmins:[],adminVerifications:[],adminSelectedUserId:null,adminSearch:'',adminSortBy:'pending',adminSortOrder:'desc',adminFilterAccountStatus:'all',adminFilterWarnings:'all',adminFilterReporters:'all',adminFilterReason:'all',adminFiltersOpen:false,adminTab:'reports',adminFilter:'pending'});}});
 const cx = installConnections({state,api,modal,closeModal:()=>window.closeModal(),render,toast:t=>window.toast(t),escapeHtml,avatar,loadDiscover,loadInbox,openComposer});
 const reviewCentre = installReviewCentre({state,api,layout,render,escapeHtml,icons,modal,closeModal:()=>window.closeModal(),loadMe});

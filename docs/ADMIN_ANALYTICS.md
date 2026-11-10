@@ -4,9 +4,9 @@ Open `/admin` as a signed-in administrator. Platform administrators start at the
 
 ## Access boundaries
 
-- Accounts in `ADMIN_EMAILS` are platform administrators. Existing excluded-admin checks still apply.
+- `ADMIN_EMAILS` bootstraps platform owners into `staff_access`. Database grants and revocations are authoritative after import; restarting never restores a revoked grant.
 - Dynamically granted moderators are restricted to their account's college. Only platform administrators can grant or revoke staff access.
-- `/api/admin/*` requires a real authenticated administrator session. The legacy `x-admin-key` bypass is no longer accepted.
+- `/api/admin/*` requires a real authenticated administrator session and a separate 30-minute authenticator session. The legacy `x-admin-key` bypass is no longer accepted.
 - `X-Afterclass-Campus` selects a college, or `campusId` is accepted for protected verification-image URLs. The server validates access; modifying the client does not grant another college's access.
 - Report lists, report transcripts, verification queues/photos, staff lists and moderation actions are scoped. Switching colleges aborts outstanding UI requests and clears the previous workspace.
 - Account-review decisions and hearing participation retain their existing college and independent-reviewer permissions. The overview shows their aggregate workload, but platform-wide analytics does not unlock evidence or permit bypassing reviewer independence.
@@ -80,4 +80,39 @@ Migration `20261110000300_admin_operations` adds measurement configuration, acti
 
 Validation: `RUN_ADMIN_OPERATIONS_TESTS=1 RUN_ADMIN_ANALYTICS_TESTS=1 RUN_ACCOUNT_REVIEW_TESTS=1 RUN_HEARING_TESTS=1 node --test tests/admin-operations.test.mjs tests/admin-analytics.test.mjs tests/account-review-integration.test.mjs tests/hearings-integration.test.mjs`.
 
-Still unmeasured: anonymous visits, signup abandonment, referral attribution, revenue, acquisition cost and lifetime value. Next infrastructure upgrades are provider API ingestion, durable multi-server monitoring, audit export/retention policy, and external escalation notifications after delivery rules and recipients are configured.
+Still unmeasured: anonymous visits, signup abandonment, referral attribution, revenue, acquisition cost and lifetime value. Remaining infrastructure work includes provider API ingestion, audit export/retention policy, and external escalation notifications after delivery rules and recipients are configured.
+
+## Staff workspace and security rollout — 10 November 2026
+
+The student navigation has a separate **Staff workspace** entry. Staff navigation contains the dashboard, college directory (owners only), moderation, campus pilot, reliability (owners only), and hearings. Moderation remains a function inside the staff workspace; it has not been removed.
+
+Migration `20261110000400_security_operations` must precede startup. It adds durable grants, encrypted authenticator seeds, recovery-code hashes, authentication throttles, service observations, incidents, and campus launch notes. All new tables have RLS with no browser-facing policies. Backend database privileges remain sensitive.
+
+### First staff sign-in
+
+1. Sign in normally, then open Staff workspace. Enrol within ten minutes of primary sign-in; otherwise sign in again.
+2. Add the displayed key to an authenticator using time-based six-digit codes. Enter a current code.
+3. Save the eight single-use recovery codes in a password manager. They are displayed only once.
+4. Unlocks last 30 minutes. Lock workspace invalidates existing staff sessions. Revoking a grant also invalidates access. Recovery-code use invalidates older staff sessions.
+
+A second reviewer must verify a staff member's student profile. The instant self-verification endpoint is retired, and staff status does not bypass student verification for messaging. Photo review does not infer or overwrite gender. Public dating is disabled in production until an independent age-assurance flow is implemented and reviewed; the isolated local review can still demonstrate it.
+
+Review authentication bypass requires the guarded local review configuration and the isolated `afterclass_review` database; it is rejected in production. Never use demo accounts or demo credentials on a public server.
+
+### Durable operations
+
+Reliability stores one observation per running server per minute, retaining 30 days. The chart aggregates the last 24 hours. Alerts track Redis outages (when configured), database probes above 1.5 seconds, five-minute API errors above 5% with at least five errors, supplied quota usage at 80%, and quota snapshots older than 24 hours. Acknowledgement is distinct from resolution. A recurring incident clears its prior acknowledgement. The database stores the current incident cycle, not an immutable history of every recurrence.
+
+Database/server outages can prevent recording a sample or alert. Run `scripts/health-probe.cjs` from an independent uptime runner using `AFTERCLASS_HEALTH_URL=https://<your-host>/health` and a secret `HEALTH_SECRET`. Configure the runner to notify a real on-call recipient after failed probes. The script exits nonzero on failure and does not print credentials. No external runner, email/SMS paging, paid service or provider billing integration is configured by this change.
+
+Campus pilot is a persisted, college-scoped checklist for safety coverage, real hosts, public venues, recurring activities, restore tests, interviews, support contact and dating readiness. Notes are staff-only. Completion is an attestation, not automatic certification; it does not contact students or schedule public events.
+
+### Recovery procedures
+
+- **Account compromise:** another owner revokes the staff grant, then review audit events and invalidate affected primary sessions. Preserve incident evidence with restricted access. A reporter or subject must not review their own case.
+- **Lost authenticator:** sign in normally and use a saved recovery code. If every factor is lost, another owner must independently establish identity before a controlled database reset of that user's authenticator row and session-version increment. Record the operator, reason and approval in the incident record. Do not reset factors solely on an email request. A self-service factor replacement flow is not yet provided.
+- **Encryption-key rotation:** back up the current `STAFF_ENCRYPTION_KEY` securely with recovery access controls. Changing it without migrating enrolled secrets makes authenticators unreadable. Plan a controlled re-enrolment or encrypted-seed migration; do not rotate blindly.
+- **Database incident:** stop mutations if necessary, restore an encrypted database backup into an isolated database, apply required migrations, and verify campus isolation, grants/revocations, reports, hearings, and login. Validate uploads separately if they form part of the evidence record. Reconcile changes after the backup before cutover. Never overwrite live data as a test.
+- **Restore drill:** record backup timestamp, restoration duration, newest recovered event and missing-data interval in Campus pilot. Set recovery objectives based on this measured drill. No successful live backup restoration is claimed by the checklist.
+
+Validation includes real PostgreSQL staff enrolment, TOTP replay rejection, one-use recovery, revoked-grant persistence, campus checklist isolation, reliability chart queries and acknowledgement authorization. CI runs these alongside moderation/analytics/hearing integration suites.

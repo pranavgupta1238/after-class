@@ -12,13 +12,46 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       # The schema lives outside Prisma's default directory. Generate its
       # client and enums before tests import the matching services.
       - name: Generate Prisma client
         run: npm run db:generate
+      - run: npm audit --audit-level=high
       - run: npm test
       - run: npm run build
       - run: node --check server/index.js
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: afterclass_local_review
+          POSTGRES_DB: afterclass_review
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d afterclass_review"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:afterclass_local_review@127.0.0.1:55432/afterclass_review
+      DIRECT_URL: postgresql://postgres:afterclass_local_review@127.0.0.1:55432/afterclass_review
+      RUN_STAFF_SECURITY_TESTS: '1'
+      RUN_ADMIN_OPERATIONS_TESTS: '1'
+      RUN_ADMIN_ANALYTICS_TESTS: '1'
+      RUN_ACCOUNT_REVIEW_TESTS: '1'
+      RUN_HEARING_TESTS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run db:migrate
+      - run: node --test tests/staff-security-integration.test.mjs tests/admin-operations.test.mjs tests/admin-analytics.test.mjs tests/account-review-integration.test.mjs tests/hearings-integration.test.mjs

@@ -1,6 +1,6 @@
 # Deployment TODO — Afterclass / NIIT University
 
-Last reviewed: 2026-08-26. Pricing and free-tier limits change; re-check them before enabling public access.
+Last reviewed: 2026-11-10. Pricing and free-tier limits change; re-check them before enabling public access.
 
 ## Completed
 
@@ -39,8 +39,10 @@ Last reviewed: 2026-08-26. Pricing and free-tier limits change; re-check them be
 
 Store these in provider dashboards only—never in Git, issues, chat, screenshots, or client-side code.
 
-- [ ] `JWT_SECRET`: unique, high-entropy value.
-- [ ] `ADMIN_KEY`: separate high-entropy value.
+- [ ] `JWT_SECRET`: independent high-entropy value of at least 32 characters.
+- [ ] `OTP_PEPPER`: independent high-entropy secret of at least 32 characters.
+- [ ] `STAFF_ENCRYPTION_KEY`: independent high-entropy secret of at least 32 characters; protect its backup.
+- [ ] `ADMIN_EMAILS`: initial owner accounts; enrol their authenticators. Legacy `ADMIN_KEY` is not an access mechanism.
 - [ ] `DATABASE_URL`: Supabase pooled Postgres connection string.
 - [ ] `REDIS_URL`: Upstash Redis TLS connection string.
 - [ ] `RESEND_API_KEY`: restricted Resend API key.
@@ -74,7 +76,7 @@ Store these in provider dashboards only—never in Git, issues, chat, screenshot
 ## Stage 7 — Student Identity & Ephemeral Retention (completed)
 
 - [x] Build procedural SVG Avatar Studio with 9-layer styling and accessories.
-- [x] Implement live selfie verification pipeline with zero-storage architecture.
+- [x] Implement live selfie submission with temporary private storage, reviewer approval and scheduled cleanup. This is not zero-storage or independent age verification.
 - [x] Enforce 7-day campus chat and 14-day DM automated retention.
 - [x] Add 24-hour disappearing messages toggle in private chats.
 
@@ -90,12 +92,29 @@ Store these in provider dashboards only—never in Git, issues, chat, screenshot
 - [x] Build native browser push notifications engine with permission request flows.
 - [x] Implement zero-latency Web Audio chime sound effects synthesizer.
 - [x] Configure mobile Progressive Web App (PWA) manifest and touch icons.
-- [x] Implement zero-flicker YouTube-style blurry skeleton loading for page reloads.
+- [x] Provide branded loading and retry states for page reloads.
 - [x] Configure Oracle Cloud VM, Nginx, PM2, and multi-cloud deployment scripts.
 
 ## Before public student launch
 
-- [x] Complete the remaining roadmap stages: production database, live chat, matching, alias rotation, moderation, and push notifications.
+- [x] Implement the core database, chat, matching and moderation workflows; production launch gates below remain open.
 - [ ] Publish privacy policy, community guidelines, and moderation/escalation contacts.
 - [ ] Obtain any required NIIT University authorization for student communications and use of the university email domain.
 - [ ] Set monitoring, backups, incident response, and a cost alert/budget.
+
+## Current rollout gates
+
+- [x] Apply security/operations migration to local review and the configured main database.
+- [x] Replace environment/file role mutations with durable staff grants and revocation.
+- [x] Add staff authenticator sessions, one-use recovery, upload decoding and production configuration checks.
+- [x] Add persistent incident observations, campus pilot checklist and availability ranking explanations.
+- [ ] Enrol each real staff account, appoint an independent second reviewer and test recovery access.
+- [ ] Configure separate production secrets, HTTPS and certificate-verified Redis. Startup refuses unsafe production values. Authentication/rate limiting fail closed when Redis is unavailable.
+- [ ] Schedule the independent health probe and confirm alert delivery to a real on-call recipient.
+- [ ] Perform an encrypted backup and isolated restoration drill, with recorded recovery objectives.
+- [ ] Recruit consenting hosts and run the first supported campus activity windows; interview participants and nonparticipants.
+- [ ] Complete independent age assurance and safety review before enabling production dating. It is currently deliberately disabled.
+- [ ] Replace remaining inline UI handlers before deploying a strict script CSP; current headers are a partial CSP, not comprehensive XSS prevention.
+- [ ] Have an independent security review before broad public rollout. Passing automated checks is not a penetration test.
+
+See `docs/ADMIN_ANALYTICS.md` for staff onboarding, incident handling and recovery procedures. The new controls use the existing database/Redis services; free-tier quotas still need monitoring. No paid vendor was enabled.
