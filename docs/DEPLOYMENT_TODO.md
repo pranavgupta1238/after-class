@@ -111,7 +111,8 @@ Store these in provider dashboards only—never in Git, issues, chat, screenshot
 - [ ] Enrol each real staff account, appoint an independent second reviewer and test recovery access.
 - [ ] Configure separate production secrets, HTTPS and certificate-verified Redis. Startup refuses unsafe production values. Authentication/rate limiting fail closed when Redis is unavailable.
 - [ ] Schedule the independent health probe and confirm alert delivery to a real on-call recipient.
-- [ ] Perform an encrypted backup and isolated restoration drill, with recorded recovery objectives.
+- [x] Perform an encrypted main application-schema backup and isolated PostgreSQL restoration drill (10 November 2026).
+- [ ] Rehearse production roles/login and representative evidence recovery, set recovery objectives and off-site backup/key custody.
 - [ ] Recruit consenting hosts and run the first supported campus activity windows; interview participants and nonparticipants.
 - [ ] Complete independent age assurance and safety review before enabling production dating. It is currently deliberately disabled.
 - [ ] Replace remaining inline UI handlers before deploying a strict script CSP; current headers are a partial CSP, not comprehensive XSS prevention.
@@ -120,3 +121,5 @@ Store these in provider dashboards only—never in Git, issues, chat, screenshot
 See `docs/ADMIN_ANALYTICS.md` for staff onboarding, incident handling and recovery procedures. The new controls use the existing database/Redis services; free-tier quotas still need monitoring. No paid vendor was enabled.
 
 Notification, independent alert-runner and encrypted recovery commands: [Stage 9 operations guide](stage-9/README.md). Local Redis recovery is not a production Upstash repair.
+
+The older provider checklist above is historical, not a deployed topology. Current hosting and monitor installation plan: [Local to public rollout](LOCAL_TO_PUBLIC.md). No public deployment exists yet; GitHub Pages is not the application host.

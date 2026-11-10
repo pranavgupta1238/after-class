@@ -41,7 +41,7 @@ node --env-file=/private/recovery.env scripts/recovery.cjs backup /private/backu
 node --env-file=/private/recovery.env scripts/recovery.cjs drill /private/backups/afterclass.acb
 ```
 
-Backup streams through encryption before reaching disk. Drill authenticates and decrypts to a private temporary directory, restores into a disposable Docker database with no network access, checks core table counts, saves an adjacent private `.drill.json`, then removes the container and plaintext. It never accepts a restore-target URL. Failed operations exit nonzero and must be investigated; do not overwrite a previous backup to retry.
+Backup selects the public application schema and streams through encryption before reaching disk. Drill authenticates and decrypts to a private temporary directory, restores into a disposable Docker database with no network access, checks core table counts and operational RLS flags, saves an adjacent private `.drill.json`, then removes the container and plaintext. It never accepts a restore-target URL. Failed operations exit nonzero and must be investigated; do not overwrite a previous backup to retry. Supabase-managed schemas/extensions are excluded deliberately.
 
 This is a database/row-count check. Supabase roles/extensions may require a compatible recovery environment. Test permissions, login, staff grants, evidence uploads and application workflows separately. The script does not back up uploaded files, provider configuration or role definitions. Set retention, encrypted off-site storage, recovery time and acceptable data-loss objectives before launch. A successful demo restore does not prove production recovery.
 
@@ -54,3 +54,5 @@ This is a database/row-count check. Supabase roles/extensions may require a comp
 - Independent age assurance and safety operations before production dating is enabled.
 
 See `../DEPLOYMENT_TODO.md` and `../ADMIN_ANALYTICS.md` for rollout and staff procedures.
+
+See [Local to public rollout](../LOCAL_TO_PUBLIC.md) for the verified main-database restore result, independent systemd monitor templates, Redis candidate check, and remaining external setup.
