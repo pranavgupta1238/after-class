@@ -20,12 +20,9 @@ async function notify(env,healthy,test=false,fetcher=fetch){
 function needsAlert(previous,result,now=Date.now()){
  return !result.healthy?previous?.notifiedHealthy!==false||now-(previous.notifiedAt||0)>=6*3600000:previous?.notifiedHealthy===false;
 }
-async function main(){
- const env=process.env;
- if(process.argv.includes('--test-alert')){await notify(env,true,true);console.log(JSON.stringify({alert:'test',providerAccepted:true}));return;}
+async function runOnce(env,fetcher=fetch){
  if(!env.AFTERCLASS_HEALTH_URL)throw new Error('AFTERCLASS_HEALTH_URL is required.');
- const result=await probe(env);
- if(process.argv.includes('--dry-run')){console.log(JSON.stringify({service:'afterclass',...result,alertSent:false}));process.exitCode=result.healthy?0:1;return;}
+ const result=await probe(env,fetcher);
  if(!env.HEALTH_PROBE_STATE)throw new Error('HEALTH_PROBE_STATE must name a private persistent state file.');
  const file=path.resolve(env.HEALTH_PROBE_STATE),lock=file+'.lock',target=crypto.createHash('sha256').update(env.AFTERCLASS_HEALTH_URL).digest('hex');
  await fs.mkdir(path.dirname(file),{recursive:true,mode:0o700});
@@ -33,10 +30,16 @@ async function main(){
  try{
   let previous={};try{previous=JSON.parse(await fs.readFile(file,'utf8'));}catch(e){if(e.code!=='ENOENT')throw new Error('Probe state is unreadable; refusing to reset alert history.');}
   if(previous.target!==target)previous={};
-  let sent=false;if(needsAlert(previous,result)){await notify(env,result.healthy);sent=true;previous.notifiedAt=Date.now();previous.notifiedHealthy=result.healthy;}
+  let sent=false;if(needsAlert(previous,result)){await notify(env,result.healthy,false,fetcher);sent=true;previous.notifiedAt=Date.now();previous.notifiedHealthy=result.healthy;}
   const temp=file+'.tmp';await fs.writeFile(temp,JSON.stringify({...previous,target,checkedAt:new Date().toISOString(),healthy:result.healthy}),{mode:0o600});await fs.rename(temp,file);
-  console.log(JSON.stringify({service:'afterclass',...result,alertAccepted:sent,checkedAt:new Date().toISOString()}));process.exitCode=result.healthy?0:1;
+  return {service:'afterclass',...result,alertAccepted:sent,checkedAt:new Date().toISOString()};
  }finally{await fs.rmdir(lock);}
 }
+async function main(){
+ const env=process.env;
+ if(process.argv.includes('--test-alert')){await notify(env,true,true);console.log(JSON.stringify({alert:'test',providerAccepted:true}));return;}
+ if(process.argv.includes('--dry-run')){const result=await probe(env);console.log(JSON.stringify({service:'afterclass',...result,alertSent:false}));process.exitCode=result.healthy?0:1;return;}
+ const result=await runOnce(env);console.log(JSON.stringify(result));process.exitCode=result.healthy?0:1;
+}
 if(require.main===module)main().catch(e=>{console.error(JSON.stringify({healthy:false,error:e.message}));process.exitCode=2;});
-module.exports={probe,notify,needsAlert};
+module.exports={probe,notify,needsAlert,runOnce};

@@ -1,0 +1,23 @@
+[Unit]
+Description=Afterclass independent health probe
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+DynamicUser=yes
+EnvironmentFile=/etc/afterclass-monitor.env
+Environment=HEALTH_PROBE_STATE=/var/lib/afterclass-monitor/state.json
+StateDirectory=afterclass-monitor
+StateDirectoryMode=0700
+ExecStart=/usr/bin/node /opt/afterclass-monitor/health-probe.cjs
+TimeoutStartSec=45
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictSUIDSGID=yes
+# A detected outage is a completed check, not a broken runner. Exit 2 still fails.
+SuccessExitStatus=1
+
