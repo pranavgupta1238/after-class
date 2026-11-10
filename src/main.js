@@ -255,6 +255,17 @@ function setCachedUser(user) {
   } catch {}
 }
 
+let activityRecordedKey = '', activityRequestPending = false, activityRetryAfter = 0;
+function recordVisibleActivity() {
+  if (!state.me || state.me.restricted || document.visibilityState !== 'visible' || activityRequestPending || Date.now() < activityRetryAfter) return;
+  const key = state.me.id + ':' + new Date().toISOString().slice(0, 10);
+  if (activityRecordedKey === key) return;
+  activityRequestPending = true;
+  api('/activity', { method: 'POST', body: '{}' }).then(() => { activityRecordedKey = key; }).catch(() => { activityRetryAfter = Date.now() + 60000; }).finally(() => { activityRequestPending = false; });
+}
+document.addEventListener('pointerdown', recordVisibleActivity, { passive: true });
+document.addEventListener('keydown', recordVisibleActivity);
+document.addEventListener('visibilitychange', recordVisibleActivity);
 function updateMe(user) {
   if(state.me?.id !== user?.id)window.hearings?.reset();
   if (!user?.isAdmin || state.me?.id !== user.id || Boolean(state.me?.isPlatformAdmin)!==Boolean(user.isPlatformAdmin)) {
@@ -4298,6 +4309,7 @@ async function loadMe() {
     const data = await api('/me', { signal: controller.signal });
     if (!data.user) throw new Error('Invalid session response');
     updateMe(data.user);
+    recordVisibleActivity();
     state.authLoading = false;
     window.hearings?.checkInvites();
     if(data.user.restricted){if(state.view!=='hearings')state.view='reviews';window.history.replaceState({view:state.view},'','/'+state.view);return;}

@@ -29,6 +29,7 @@ async function seed(){
   }
   await require('./review-hearing.cjs').seedReviewHearing(db);
   await require('./review-colleges.cjs').seedReviewColleges(db);
+  await require('./review-analytics.cjs').seedReviewAnalytics(db);
   await db.$disconnect();
 }
 (async()=>{
