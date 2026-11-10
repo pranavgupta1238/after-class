@@ -1,4 +1,5 @@
 import { installStaffWorkspace } from './staff-workspace.js';
+import {installCampusManagement} from './campus-management.js';
 import { installAdminInsights } from './admin-insights.js';
 import { installHearings } from './hearings.js';
 import { installReviewCentre } from './review-centre.js';
@@ -220,6 +221,7 @@ async function api(path, options = {}) {
   }
   if (!r.ok) {
     if(data.code==='STAFF_AUTH_REQUIRED')window.staffWorkspace?.unlock();
+    if(data.code==='CAMPUS_ACCESS_DISABLED' && state.me){state.me.campusAccess=data.error;queueMicrotask(render);}
     const err = new Error(data.error || 'Something went wrong');
     err.status = r.status;
     throw err;
@@ -261,7 +263,7 @@ function setCachedUser(user) {
 
 let activityRecordedKey = '', activityRequestPending = false, activityRetryAfter = 0;
 function recordVisibleActivity() {
-  if (!state.me || state.me.restricted || document.visibilityState !== 'visible' || activityRequestPending || Date.now() < activityRetryAfter) return;
+  if (!state.me || state.me.restricted || state.me.campusAccess || document.visibilityState !== 'visible' || activityRequestPending || Date.now() < activityRetryAfter) return;
   const key = state.me.id + ':' + new Date().toISOString().slice(0, 10);
   if (activityRecordedKey === key) return;
   activityRequestPending = true;
@@ -741,7 +743,7 @@ function layout(content) {
         <div class="campus"><b>${staffView?'Administration':escapeHtml(campusName)}</b>${staffView?`<small>${escapeHtml(state.adminCampusName||campusName)}</small>`:''}</div>${me?.isAdmin&&!staffView?'<button class="staff-entry" onclick="go(\'admin\')">Staff workspace</button>':''}
         ${staffView?`<nav aria-label="Staff navigation"><button ${staffTab('analytics')} onclick="adminInsights.open(null,null,'analytics')">Dashboard</button>${me.isPlatformAdmin?`<button ${staffTab('colleges')} onclick="adminInsights.open(null,null,'colleges')">Colleges</button>`:''}<button ${staffTab('moderation')} onclick="staffWorkspace.moderation()">Moderation</button><button ${staffTab('pilot')} onclick="staffWorkspace.open('pilot')">Campus pilot</button>${me.isPlatformAdmin?`<button ${staffTab('reliability')} onclick="staffWorkspace.open('reliability')">Reliability & alerts</button>`:''}<button onclick="go('hearings')">Hearings</button><button onclick="go('home')">Back to Afterclass</button></nav>`:`<nav aria-label="Main navigation">${nav.map(([key,label,mobile])=>`<button type="button" data-nav="${key}" class="${state.view===key?'active':''}" ${state.view===key?'aria-current="page"':''} aria-label="${label}" onclick="go('${key}')"><span class="nav-icon" aria-hidden="true">${icons[key]||'◈'}</span><span class="nav-label">${label}</span><span class="nav-mobile-label">${mobile}</span>${key==='inbox'&&inboxCount?`<em aria-label="${inboxCount} incoming interests">${inboxCount}</em>`:''}</button>`).join('')}</nav>`}
 
-        <button class="sidebar-bottom" onclick="${me?'openAvatarPreview()':"go('auth')"}" aria-label="${me?'Open your profile':'Join your campus'}">${avatar(me?.avatarConfig||username,false,Boolean(me?.isVerified))}<span class="sidebar-profile-copy"><strong>${escapeHtml(username)}</strong><small>${me?(me.isVerified?'Verified student': 'Student profile'):'Sign in to get started'}</small></span></button>
+        <button class="sidebar-bottom" onclick="${me?'openAvatarPreview()':"go('auth')"}" aria-label="${me?'Open your profile':'Join your campus'}">${avatar(me?.avatarConfig||username,false,Boolean(me?.isVerified))}<span class="sidebar-profile-copy"><strong>${escapeHtml(username)}</strong><small>${me?(me.isVerified?(me.campusRole==='faculty'?'Verified faculty':'Verified student'):(me.campusRole==='faculty'?'Faculty profile':'Student profile')):'Sign in to get started'}</small></span></button>
       </aside>
       <main id="main-content" tabindex="-1" class="${state.view==='chat'?'chat-main':state.view==='safety'?'safety-main':''}">
         <div class="experience-toolbar">${staffView?`<div class="toolbar-location"><span class="toolbar-symbol" aria-hidden="true">✳</span><span>Staff workspace</span></div><div class="staff-controls">${appearanceControl()}<button class="secondary" onclick="staffWorkspace.unlock()">Staff security</button><button class="secondary" onclick="staffWorkspace.lock()">Lock workspace</button></div>`:`<div class="toolbar-location"><span class="toolbar-symbol" aria-hidden="true">✳</span><span>${currentLabel}</span></div><a class="mobile-wordmark" href="/" onclick="event.preventDefault();go('home')">✦ afterclass<span>.</span></a>${me?.isAdmin?'<button class="mobile-staff-entry" onclick="go(\'admin\')">Staff</button>':''}<div class="toolbar-actions">${appearanceControl()}${window.hearings?.nav()||''}<button class="toolbar-safety" aria-label="Trust and safety" onclick="go('safety')">${icons.safety}</button><button class="toolbar-create" aria-label="Create a plan" onclick="openComposer()"><span aria-hidden="true">＋</span><span class="toolbar-create-label">New plan</span></button><button class="toolbar-profile" aria-label="Open your profile" onclick="${me?'openAvatarPreview()':"go('auth')"}">${avatar(me?.avatarConfig||username,true,Boolean(me?.isVerified))}</button></div>`}</div>
@@ -2186,7 +2188,7 @@ function settings() {
   const device = getDeviceDescription();
   const row = (title, description, control) => `<div class="preference-row"><div><strong>${title}</strong><small>${description}</small></div>${control}</div>`;
   return layout(`<section class="portal-heading"><div><h1>Settings</h1></div></section>
-    <div class="account-layout"><div class="account-summary">${avatar(me?.avatarConfig || me?.username || 'Guest',false,Boolean(me?.isVerified))}<h2>${escapeHtml(me?.username || 'Guest')}</h2><p>${escapeHtml(me?.university || 'NIIT University')}</p><span class="account-status">${me?.isVerified ? 'Verified student' : me ? 'Student account' : 'Not signed in'}</span><button class="secondary" onclick="${me?'openAvatarPreview()':'openAuth()'}">${me?'View profile':'Sign in'}</button>${me?.isAdmin?`<button class="account-admin" onclick="go('admin')">Moderation workspace</button>`:''}</div>
+    <div class="account-layout"><div class="account-summary">${avatar(me?.avatarConfig || me?.username || 'Guest',false,Boolean(me?.isVerified))}<h2>${escapeHtml(me?.username || 'Guest')}</h2><p>${escapeHtml(me?.university || 'NIIT University')}</p><span class="account-status">${me?.isVerified ? (me.campusRole==='faculty'?'Verified faculty':'Verified student') : me ? (me.campusRole==='faculty'?'Faculty account':'Student account') : 'Not signed in'}</span><button class="secondary" onclick="${me?'openAvatarPreview()':'openAuth()'}">${me?'View profile':'Sign in'}</button>${me?.isAdmin?`<button class="account-admin" onclick="go('admin')">Moderation workspace</button>`:''}</div>
     <div class="account-sections">${appearanceSettings()}${cx.settings()}<section class="preference-group"><h2>Profile & privacy</h2>
       ${row('Campus alias','Your public name on Afterclass.',`<span>${escapeHtml(me?.username || 'Guest')}</span>`)}
       ${row('Student verification',me?.isVerified?'Your student profile is verified.':me?.verificationStatus==='pending'?'Your submission is awaiting review.':me?.verificationStatus==='rejected'?'Submit a new photo for review.':'Verify your student profile.',me?.isVerified?'<span class="account-status">Verified</span>':me?`<div class="preference-actions">${me.verificationStatus==='pending'?`<button class="secondary" onclick="loadMe()">Check status</button>`:''}<button class="secondary" onclick="openVerificationModal()">${me.verificationStatus==='pending'?'Retake':'Verify'}</button></div>`:`<button class="secondary" onclick="openAuth()">Sign in</button>`)}
@@ -2272,7 +2274,7 @@ function authPage() {
               </ul>
 
               <button type="button" class="auth-primary-btn" onclick="handleStartForFree()">
-                Continue with student email →
+                Continue with university email →
               </button>
 
               <div class="auth-divider-or"><span>or</span></div>
@@ -2303,7 +2305,7 @@ function authPage() {
               </button>
               <span class="auth-form-eyebrow-tag">✦ STEP 1 OF 2 · STUDENT SETUP</span>
               <h2 class="auth-card-title">Create your<br>profile</h2>
-              <p class="auth-card-sub">Enter your student email and select your gender for companion and partner matching.</p>
+              <p class="auth-card-sub">Enter your university email and select your gender for companion and partner matching.</p>
 
               <form id="auth-page-form" onsubmit="handleAuthPageSendOtp(event)">
                 <div class="auth-form-group">
@@ -2957,7 +2959,7 @@ async function openVerificationModal() {
       <div class="verif-modal-header">
         <span class="eyebrow">IDENTITY &amp; TRUST SAFETY</span>
         <h2 style="font-size:22px;margin:4px 0 2px;display:flex;align-items:center;gap:8px;">
-          <span>📸</span> Live Student Verification
+          <span>📸</span> Live Account Verification
         </h2>
         <p style="font-size:12.5px;color:var(--muted);margin:0 0 12px;">
           To stop catfishing and fake accounts, take a quick 5-second live selfie matching the gesture challenge below.
@@ -3912,7 +3914,7 @@ function confirmationDialog({ title, description, note, action, actionLabel, can
 window.openLogoutAllModal = () => confirmationDialog({
   title: 'Sign out on all devices?',
   description: 'This includes the device you’re using now.',
-  note: 'You’ll need your student email to sign in again.',
+  note: 'You’ll need your university email to sign in again.',
   action: 'logoutAllDevices()', actionLabel: 'Sign out everywhere', icon: 'devices'
 });
 
@@ -4268,6 +4270,7 @@ async function loadMe() {
     recordVisibleActivity();
     state.authLoading = false;
     window.hearings?.checkInvites();
+    if(data.user.campusAccess&&!data.user.isPlatformAdmin)return;
     if(data.user.restricted){if(state.view!=='hearings')state.view='reviews';window.history.replaceState({view:state.view},'','/'+state.view);return;}
     if (state.view === 'auth') {
       const urlView = getViewFromPath(window.location.pathname) || 'home';
@@ -4467,12 +4470,13 @@ function setCampusPresence(count) {
 }
 
 function initSocket() {
-  if(state.me?.restricted)return;
+  if(state.me?.restricted||state.me?.campusAccess)return;
   if (socket || !state.me) return;
   const socketUrl = import.meta.env.VITE_API_URL ? new URL(import.meta.env.VITE_API_URL, location.origin).origin : location.origin;
   socket = io(socketUrl, { withCredentials: true });
 
   // The server joins the authenticated user's own campus and account rooms.
+  socket.on('campus:policy-changed',()=>{window.closeModal();socket?.disconnect();loadMe();});
   socket.on('account:restricted', () => { window.closeModal();socket?.disconnect();loadMe(); });
   socket.on('disconnect', () => setCampusPresence(null));
   socket.on('connect_error', () => setCampusPresence(null));
@@ -4890,6 +4894,7 @@ function verificationPage() {
 }
 
 const staffWorkspace=installStaffWorkspace({api,state,render,layout,escapeHtml});
+installCampusManagement({api,escapeHtml});
 const adminInsights=installAdminInsights({state,api,render,layout,escapeHtml,resetWorkspace:()=>{adminLoader.reset();contextLoader.reset();Object.assign(state,{adminLoads:{},adminContexts:{},adminReports:[],adminModerators:[],adminPrimaryAdmins:[],adminVerifications:[],adminSelectedUserId:null,adminSearch:'',adminSortBy:'pending',adminSortOrder:'desc',adminFilterAccountStatus:'all',adminFilterWarnings:'all',adminFilterReporters:'all',adminFilterReason:'all',adminFiltersOpen:false,adminTab:'reports',adminFilter:'pending'});}});
 const cx = installConnections({state,api,modal,closeModal:()=>window.closeModal(),render,toast:t=>window.toast(t),escapeHtml,avatar,loadDiscover,loadInbox,openComposer});
 const reviewCentre = installReviewCentre({state,api,layout,render,escapeHtml,icons,modal,closeModal:()=>window.closeModal(),loadMe});
@@ -4919,6 +4924,9 @@ function render() {
     </main>`;
     document.querySelector('#retry-startup').addEventListener('click', loadMe);
     return;
+  }
+  if(state.me?.campusAccess && !(state.me.isPlatformAdmin&&state.view==='admin') && !['reviews','hearings'].includes(state.view)){
+    appEl.innerHTML=`<main class="campus-access-panel"><h1>University access</h1><p>${escapeHtml(state.me.campusAccess)}</p><p>Your account and records are retained. Existing account reviews remain accessible.</p>${state.me.isPlatformAdmin?'<button class="primary" onclick="go(\'admin\')">Open administration</button>':''}<button class="secondary" onclick="go('reviews')">Your account reviews</button><button class="secondary" onclick="logout()">Sign out</button></main>`;return;
   }
   if(state.me?.restricted&&!['reviews','hearings'].includes(state.view))state.view='reviews';
   const currentView = views[state.view] || home;

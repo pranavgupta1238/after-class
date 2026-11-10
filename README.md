@@ -13,7 +13,7 @@ npm run build
 npm start
 ```
 
-For this workspace, open `http://localhost:3002`. Port 3001 was already occupied when the local server was started. To run it yourself, use `PORT=3002 npm start` (or choose any free port). NIIT University is the first configured campus; only `@niituniversity.in` addresses can verify. Copy `.env.example` to `.env` before production use. The one-time code is returned only in development and logged by the server.
+For this workspace, open `http://localhost:3002`. Port 3001 was already occupied when the local server was started. To run it yourself, use `PORT=3002 npm start` (or choose any free port). NIIT University is the first configured campus. University admission is managed in Administration → Colleges → Access settings. Copy `.env.example` to `.env` before production use. The one-time code is returned only in development when no email provider is configured.
 
 ## Connection experience review
 
@@ -77,18 +77,51 @@ review database, and checks eligibility, privacy, concurrent meeting changes, li
 and campus-scoped appeal decisions. Stop the review server with Ctrl+C; optionally stop its
 database with `docker stop afterclass-review-db`. Demo sessions are never enabled by the normal app.
 
-## Implemented backend
+## University administration
 
-- HTTP-only 30-day JWT sessions and university-domain OTP verification
-- Temporary local account/OTP store at `server/data.json` (intentionally ignored by Git); campus chat messages and reports persist in local Postgres via Prisma.
-- Campus and match-room Socket.IO authentication, history, content sanitisation and message throttling
-- Activity requests, applications, accept/match flow, and private rooms
-- Mutual reveal request state, reporting and protected admin reports endpoint
-- Per-account limits for OTP, messages, plans and reports
+Sign in as a platform administrator, unlock the staff workspace with your authenticator,
+and open **Administration → Colleges**. Campus moderators cannot change admission rules.
 
-## Production adapters to complete before launch
+1. **Add university:** provide a name, permanent identifier, primary domain, and exact email rules.
+   New universities start paused; a campus chat room is created automatically.
+2. Choose **Students only**, **Faculty only**, or **Students and faculty**. Configure distinct
+   student/faculty domains when the university confirms that they identify membership.
+   Shared domains require an approved roster (`email, student` or `email, faculty`, one per line;
+   maximum 200 entries). Subdomains are not implicitly trusted. Test an email before saving.
+3. Review host and moderation coverage, then use **Access settings → Active** to launch.
+4. **Close registrations** to stop new accounts while keeping existing eligible members active.
+   **Pause** temporarily stops community access. **Retire** removes the university from service
+   while preserving account, moderation and hearing records. Retired universities can be reactivated.
+5. Preview the impact, type the current university name and enter a reason before applying changes.
+   Policy changes are audited and protected against overwriting another administrator's edits.
 
-The application is runnable locally, but live deployment must swap the local store/OTP development transport for Postgres/Prisma, Redis (for distributed limits and job queues), and Resend. Set a high-entropy `JWT_SECRET`, `ADMIN_KEY`, HTTPS, `secure` cookies, a real permitted university domain, and add a proper audited admin authentication flow. Do not operate the supplied fallback data store for a public campus launch.
+Both OTP and Google sign-in enforce the stored rules, including a final check when creating the
+session. Existing sessions are checked too. Policy changes disconnect campus sockets; affected
+accounts lose availability and their open plans / active meetings are cancelled. Reactivation
+never silently reopens cancelled plans. Existing members can still sign in to access their own account reviews; community APIs stay blocked. A platform
+owner can still open administration to recover their own paused university.
+
+Faculty membership does not grant staff permissions. Campus chat is shared by enabled member
+groups; one-to-one matching remains within the same group. Faculty dating is disabled. Email
+ownership verifies control of an address, not employment or current enrollment independently.
+Institutional SSO, periodic re-verification and roster synchronization are future work.
+
+NIIT remains students-only. `st.niituniversity.in` is its student domain. Previously enrolled
+root-domain accounts are preserved as students in its explicit roster; new root-domain addresses
+must be reviewed and added to that roster with the correct role. Confirm faculty rules with the
+university before enabling faculty membership. No new university is activated by this migration.
+`CAMPUSES_JSON` is no longer used. Domains reserved by another university cannot be reused,
+including retired universities. Campus transfers require a separate reviewed process.
+
+## Backend and launch readiness
+
+Accounts, campus policies, messages, plans, reports and staff audit records persist in PostgreSQL
+through Prisma. Redis provides OTP storage and rate limiting; Resend delivers sign-in emails.
+Staff access uses explicit grants, MFA, expiring staff sessions and revocation.
+
+Before public launch, configure and verify Redis and email delivery, independent uptime alerts,
+backup restoration, and campus moderation coverage. Production dating remains disabled pending
+independent age assurance and operational readiness. See the operational guides in `docs/`.
 
 ## Upstash Redis
 
