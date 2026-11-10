@@ -14,8 +14,12 @@ function attachments(input=[]){
   return {name:String(file.name||'Evidence image').slice(0,120),data:file.data};
  });
 }
+async function normalizedAttachments(input=[]){
+ const files=attachments(input);const out=[];
+ for(const file of files){try{const bytes=await require('./security').normalizeSelfie(file.data);out.push({name:file.name,data:'data:image/webp;base64,'+bytes.toString('base64')});}catch(e){fail(e.message);}}return out;
+}
 function independent(action,reviewerId){return Boolean(reviewerId&&reviewerId!==action.userId&&reviewerId!==action.adminUserId&&!((action.evidence||{}).reporterIds||[]).includes(reviewerId));}
 function publicAction(action){return {id:action.id,type:action.type,policy:action.policy||'Account restriction',summary:action.publicSummary||'This restriction predates the Review Centre. Ask for a review to request an explanation.',startsAt:action.startsAt,endsAt:action.endsAt,liftedAt:action.liftedAt};}
 function publicReview(review){return {id:review.id,status:review.status,outcome:review.outcome,createdAt:review.createdAt,resolvedAt:review.resolvedAt,reopenedAt:review.reopenedAt,action:publicAction(review.action),entries:(review.entries||[]).map(({id,kind,body,attachments,createdAt})=>({id,kind,body,attachments,createdAt}))};}
 function hours(value){if(!Number.isInteger(value)||value<1||value>8760)fail('Choose a duration between 1 hour and 1 year.');return value;}
-module.exports={POLICIES,fail,text,attachments,independent,publicAction,publicReview,hours};
+module.exports={POLICIES,fail,text,attachments,normalizedAttachments,independent,publicAction,publicReview,hours};

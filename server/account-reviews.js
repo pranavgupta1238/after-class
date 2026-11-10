@@ -21,9 +21,9 @@ async function restrictAccount(prisma,{userId,actor,action,body,reportId}){
   return record;
  },{timeout:20000});
 }
-function registerAccountReviews({app,prisma,sessionAuth,auth,isAdminUser,io,limit,hearingService,auditAdmin}){
+function registerAccountReviews({app,prisma,sessionAuth,auth,isAdminUser,io,limit,hearingService,auditAdmin,requireStaffSession}){
  const guardAdmin=(req,res,next)=>auth(req,res,async()=>{
-  try{if(!await isAdminUser(req.user))return res.status(403).json({error:'Moderator access required.'});req.adminCampusId=req.user.campusId;await auditAdmin?.(req,res);next();}catch{res.status(503).json({error:'Please try again.'});}
+  try{if(!await isAdminUser(req.user))return res.status(403).json({error:'Moderator access required.'});if(requireStaffSession&&!await requireStaffSession(req,res))return;req.adminCampusId=req.user.campusId;await auditAdmin?.(req,res);next();}catch{res.status(503).json({error:'Please try again.'});}
  });
  const route=(method,path,guard,handler)=>app[method](path,guard,async(req,res)=>{
   res.set('Cache-Control','no-store');
@@ -59,7 +59,7 @@ function registerAccountReviews({app,prisma,sessionAuth,auth,isAdminUser,io,limi
   res.json({restricted:Boolean(req.restricted),decisions:actions.map(a=>({...p.publicAction(a),review:a.review})),policies:p.POLICIES});
  });
  route('post','/api/reviews',sessionAuth,async(req,res)=>{
-  const statement=p.text(req.body.statement);const attachments=p.attachments(req.body.attachments);
+  const statement=p.text(req.body.statement);const attachments=await p.normalizedAttachments(req.body.attachments);
   const result=await prisma.$transaction(async tx=>{
    await lockUser(tx,req.user.id);
    const action=await tx.moderationAction.findFirst({where:{id:req.body.actionId,userId:req.user.id,type:{in:restrictionTypes}}});if(!action)p.fail('Decision not found.',404);
@@ -68,7 +68,7 @@ function registerAccountReviews({app,prisma,sessionAuth,auth,isAdminUser,io,limi
  });
  route('get','/api/reviews/:id',sessionAuth,async(req,res)=>res.json({case:p.publicReview(await owned(req.params.id,req.user))}));
  route('post','/api/reviews/:id/evidence',sessionAuth,async(req,res)=>{
-  const body=p.text(req.body.statement),attachments=p.attachments(req.body.attachments);
+  const body=p.text(req.body.statement),attachments=await p.normalizedAttachments(req.body.attachments);
   await change(req.params.id,req.user,async tx=>{
    const c=await tx.accountReview.findFirst({where:{id:req.params.id,userId:req.user.id},include:{entries:{select:{id:true}}}});if(!c)p.fail('Case not found.',404);
    if(c.entries.length>=40)p.fail('This case has reached its submission limit. Wait for the reviewer’s response.',409);

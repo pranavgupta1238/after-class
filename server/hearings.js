@@ -5,7 +5,7 @@ const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}(-[0-9a-f]{4}){3
 const include = {slot:true,review:{include:{action:true}},participants:true};
 const unavailable = u => !u || u.accountStatus==='banned' || (u.accountStatus==='suspended'&&!u.suspendedUntil) || u.suspendedUntil>new Date();
 
-function registerHearings({app,prisma,sessionAuth,isAdminUser,limit,auditAdmin}) {
+function registerHearings({app,prisma,sessionAuth,isAdminUser,limit,auditAdmin,requireStaffSession}) {
  const changes = new EventEmitter(); changes.setMaxListeners(200);
  const signal = id => changes.emit(id);
  async function isJudge(user) { return !unavailable(user) && await isAdminUser(user); }
@@ -39,6 +39,7 @@ function registerHearings({app,prisma,sessionAuth,isAdminUser,limit,auditAdmin})
   app[method](path,sessionAuth,async(req,res)=>{
    res.set('Cache-Control','no-store');
    try {
+    if(await isJudge(req.user)&&requireStaffSession&&!await requireStaffSession(req,res))return;
     if(req.params.id&&!uuid(req.params.id))p.fail('Invalid ID.');
     if(method!=='get'&&!await limit('hearing:'+req.user.id,120,60000))p.fail('Please slow down and try again.',429);
     if(!path.endsWith('/events')&&!path.endsWith('/presence')&&await isJudge(req.user)){req.adminCampusId=req.user.campusId;await auditAdmin?.(req,res);}
@@ -195,7 +196,7 @@ function registerHearings({app,prisma,sessionAuth,isAdminUser,limit,auditAdmin})
   });signal(req.params.id);res.json({ok:true});
  });
  endpoint('post','/api/hearings/:id/messages',async(req,res)=>{
-  const body=p.text(req.body.body,1,4000),attachments=p.attachments(req.body.attachments),visibility=req.body.visibility;
+  const body=p.text(req.body.body,1,4000),attachments=await p.normalizedAttachments(req.body.attachments),visibility=req.body.visibility;
   if(!['shared','private'].includes(visibility))p.fail('Choose who can see your message.');
   const {h}=await load(req.params.id,req.user);await expire(h);
   await locked(req.params.id,req.user,async(tx,{h,role,member})=>{

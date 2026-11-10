@@ -9,6 +9,8 @@ function ageOn(date, now = new Date()) {
   return now.getUTCFullYear() - d.getUTCFullYear() - (now.getUTCMonth() < d.getUTCMonth() || (now.getUTCMonth() === d.getUTCMonth() && now.getUTCDate() < d.getUTCDate()) ? 1 : 0);
 }
 function datingEligible(user, profile, now = new Date()) {
+  // Self-declared birth dates are not independent age assurance. Demo/local only.
+  if (process.env.NODE_ENV === 'production') return false;
   const age = ageOn(profile?.birthDate, now);
   return eligibleForPairing(user, now.getTime()) && profile?.datingEnabled === true && age >= 18 && age <= 100;
 }
@@ -46,6 +48,10 @@ function profileInput(body, current, user) {
     if (!Number.isFinite(d.getTime()) || d.toISOString().slice(0,10) !== body.birthDate || ageOn(d) === null || ageOn(d) > 100) throw new Error('Enter a valid birth date.');
     if (data.birthDate && new Date(data.birthDate).getTime() !== d.getTime()) throw new Error('Birth date is already recorded. Contact a moderator for a correction.');
     data.birthDate = d;
+  }
+  if (process.env.NODE_ENV === 'production') {
+    if(body.datingEnabled===true)throw new Error('Dating is not open for public launch yet. Campus plans are available.');
+    data.datingEnabled=false;
   }
   if (data.datingEnabled && !datingEligible(user, data)) throw new Error('Dating requires an approved student account and a birth date showing you are 18 or older.');
   return data;

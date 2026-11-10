@@ -76,6 +76,24 @@ test('admin operations database and access boundaries',{skip:process.env.RUN_ADM
    await new Promise(r=>setTimeout(r,200));
    const audit=await call(root,'/admin/operations/audit');assert.ok(audit.data.events.some(x=>x.operation.endsWith('/export')&&x.outcome==='succeeded'));
   });
+  await t.test('chat rejects malformed content, checks current verification and throttles messages',async()=>{
+   const {io}=require('socket.io-client');
+   const room=await db.chatRoom.create({data:{campusId:campuses[0].id,kind:'campus'}});
+   const token=jwt.sign({sub:subject.id,sv:subject.sessionVersion},secret,{issuer:'afterclass',audience:'afterclass-web',expiresIn:'5m'});
+   const socket=io(base,{auth:{token},transports:['websocket'],reconnection:false});
+   try{
+    await new Promise((resolve,reject)=>{socket.once('connect',resolve);socket.once('connect_error',reject);});
+    const send=payload=>socket.timeout(3000).emitWithAck('campus:message',payload);
+    for(const value of [null,{}, {content:42}])assert.ok((await send(value)).error);
+    assert.equal((await send({content:'Integration chat'})).ok,true);
+    await db.user.update({where:{id:subject.id},data:{isVerified:false}});
+    assert.ok((await send({content:'Must be rejected'})).error);
+    await db.user.update({where:{id:subject.id},data:{isVerified:true}});
+    for(let i=0;i<29;i++)assert.equal((await send({content:'Rate test '+i})).ok,true);
+    assert.match((await send({content:'Limit exceeded'})).error,/wait/);
+   }finally{socket.disconnect();await db.message.deleteMany({where:{roomId:room.id}});await db.chatRoom.delete({where:{id:room.id}});}
+  });
+
  }finally{
   if(server){server.kill('SIGTERM');await new Promise(r=>server.once('exit',r));}
   const ids=campuses.map(c=>c.id);if(ids.length){await db.$executeRaw`DELETE FROM admin_audit_events WHERE campus_id=ANY(${ids}::uuid[])`;await db.report.deleteMany({where:{campusId:{in:ids}}});await db.user.deleteMany({where:{campusId:{in:ids}}});await db.campus.deleteMany({where:{id:{in:ids}}});}await db.$disconnect();

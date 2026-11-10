@@ -64,7 +64,8 @@ function createOperations(prisma) {
   route('get','/api/admin/operations/cases',async(req,res)=>{
    const campus=scope(req);
    const cases=await prisma.$queryRaw`SELECT r.id,r.campus_id,r.reason,r.status,r.created_at,c.name college,u.public_alias account,a.assignee_id,v.public_alias assignee,a.updated_at FROM reports r JOIN campuses c ON c.id=r.campus_id JOIN users u ON u.id=r.reported_user_id LEFT JOIN report_assignments a ON a.report_id=r.id LEFT JOIN users v ON v.id=a.assignee_id WHERE (${campus}::uuid IS NULL OR r.campus_id=${campus}::uuid) AND r.status IN ('pending','reviewing') ORDER BY r.created_at ASC LIMIT 100`;
-   const staffEmails=[...new Set([...(process.env.ADMIN_EMAILS||'').split(',').map(e=>e.trim().toLowerCase()),...await redis.getModeratorEmails()])];
+   const grants=await prisma.$queryRaw`SELECT email FROM staff_access WHERE revoked_at IS NULL`;
+   const staffEmails=grants.map(x=>x.email);
    const staff=await prisma.user.findMany({where:{email:{in:staffEmails},...(campus?{campusId:campus}:{}),accountStatus:'active'},select:{id:true,publicAlias:true,campusId:true}});
    const eligible=[];for(const u of staff){const full=await prisma.user.findUnique({where:{id:u.id}});if(await isAdminUser(full))eligible.push(u);}
    res.json({cases,staff:eligible,limit:100});

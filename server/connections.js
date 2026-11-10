@@ -12,7 +12,7 @@ function registerConnections({app,prisma,auth,requireAdmin,io,closeMatch}) {
   });
   route('get','/api/connections/me',auth,async(req,res)=>{
     const profile=await prisma.connectionProfile.findUnique({where:{userId:req.user.id}});
-    res.json({profile,options:{interests:policy.INTERESTS,prompts:policy.PROMPTS},datingEligible:policy.datingEligible(req.user,profile)});
+    res.json({profile,options:{interests:policy.INTERESTS,prompts:policy.PROMPTS},datingLaunchReady:process.env.NODE_ENV!=='production',datingEligible:policy.datingEligible(req.user,profile)});
   });
   route('patch','/api/connections/me',auth,async(req,res)=>{
     const profile=await prisma.$transaction(async tx=>{
@@ -25,7 +25,7 @@ function registerConnections({app,prisma,auth,requireAdmin,io,closeMatch}) {
       }
       return tx.connectionProfile.upsert({where:{userId:req.user.id},create:{userId:req.user.id,...data},update:data});
     });
-    res.json({profile,datingEligible:policy.datingEligible(req.user,profile)});
+    res.json({profile,datingLaunchReady:process.env.NODE_ENV!=='production',datingEligible:policy.datingEligible(req.user,profile)});
   });
   route('post','/api/connections/availability',auth,async(req,res)=>{
     if(!eligibleForPairing(req.user)) throw new Error('Complete student verification before sharing availability.');
@@ -37,8 +37,10 @@ function registerConnections({app,prisma,auth,requireAdmin,io,closeMatch}) {
   });
   route('get','/api/connections/available',auth,async(req,res)=>{
     const excluded=await policy.blockedIds(prisma,req.user.id);
-    const users=await prisma.user.findMany({where:{campusId:req.user.campusId,id:{notIn:[req.user.id,...excluded]},connectionProfile:{availableUntil:{gt:new Date()}}},include:{connectionProfile:true},take:100});
-    res.json({people:users.filter(u=>policy.canConnect(req.user,u)).map(u=>({...policy.publicProfile(u),availableUntil:u.connectionProfile.availableUntil,activity:u.connectionProfile.availabilityActivity}))});
+    const users=await prisma.user.findMany({where:{campusId:req.user.campusId,id:{notIn:[req.user.id,...excluded]},connectionProfile:{availableUntil:{gt:new Date()}}},include:{connectionProfile:true},orderBy:{id:'asc'},take:100});
+    const viewer={...req.user,connectionProfile:await prisma.connectionProfile.findUnique({where:{userId:req.user.id}})};
+    const ranked=require('./availability-ranking').rankAvailable(viewer,users.filter(u=>policy.canConnect(req.user,u)));
+    res.json({people:ranked.map(({user:u,reasons,overlapMinutes,sharedInterests})=>({...policy.publicProfile(u),availableUntil:u.connectionProfile.availableUntil,activity:u.connectionProfile.availabilityActivity,reasons,overlapMinutes,sharedInterests}))});
   });
   route('get','/api/connections/profiles/:id',auth,async(req,res)=>{
     if(!UUID.test(req.params.id)) throw new Error('Profile unavailable.');

@@ -11,7 +11,7 @@ function getClient() {
   if (!process.env.REDIS_URL) return null;
   if (!client) {
     client = new Redis(process.env.REDIS_URL, {
-      tls: { rejectUnauthorized: false },
+      ...(process.env.REDIS_URL.startsWith('rediss://') ? {tls:{rejectUnauthorized:true}} : {}),
       // Permission/cache reads must not wait through repeated connection attempts.
       // Existing local fallbacks handle failed commands; reconnect in the background.
       connectTimeout: 1500,
@@ -36,7 +36,7 @@ function localLimit(key, max, windowMs) {
 async function limit(key, max, windowMs) {
   try {
     const redis = getClient();
-    if (!redis) return localLimit(key, max, windowMs);
+    if (!redis) return process.env.NODE_ENV === 'production' ? false : localLimit(key, max, windowMs);
     const count = await redis.eval(
       "local count = redis.call('INCR', KEYS[1]); if count == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]); end; return count",
       1,
@@ -45,8 +45,14 @@ async function limit(key, max, windowMs) {
     );
     return count <= max;
   } catch (err) {
-    return localLimit(key, max, windowMs);
+    return process.env.NODE_ENV === 'production' ? false : localLimit(key, max, windowMs);
   }
+}
+
+async function setAuthOtp(email,data){
+ if(process.env.NODE_ENV!=='production')return setOtp(email,data);
+ const connection=getClient();if(!connection)throw new Error('OTP store unavailable');
+ await connection.set(OTP_PREFIX+email,JSON.stringify(data),'PX',OTP_TTL_MS);
 }
 
 // OTP helpers — store one-time codes in Upstash Redis with a 10-minute TTL.
@@ -84,6 +90,18 @@ async function getOtp(email) {
     if (!entry || entry.expiresAt <= Date.now()) { otpFallback.delete(email); return null; }
     return entry;
   }
+}
+
+// Compare and delete in a single operation: parallel requests cannot redeem a code twice.
+async function consumeOtp(email, codeHash) {
+  try {
+    const connection=getClient();
+    if(connection){const raw=await connection.eval("local raw=redis.call('GET',KEYS[1]); if not raw then return nil end; local data=cjson.decode(raw); if data.codeHash~=ARGV[1] then return nil end; redis.call('DEL',KEYS[1]); return raw",1,OTP_PREFIX+email,codeHash);return raw?JSON.parse(raw):null;}
+    if(process.env.NODE_ENV==='production')return null;
+    const entry=otpFallback.get(email);
+    if(!entry||entry.expiresAt<=Date.now()||entry.codeHash!==codeHash)return null;
+    otpFallback.delete(email);return entry;
+  }catch{return null;}
 }
 
 // Read independent cached entries in one round trip (chat reaction history).
@@ -197,7 +215,9 @@ async function removeExcludedAdminEmail(email) {
 module.exports = {
   limit,
   setOtp,
+  setAuthOtp,
   getOtp,
+  consumeOtp,
   getOtpBatch,
   delOtp,
   ping,

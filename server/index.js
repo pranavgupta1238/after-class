@@ -1,4 +1,6 @@
 if (process.env.AFTERCLASS_REVIEW !== '1') require('dotenv').config?.();
+const security = require('./security');
+security.validateProduction();
 const express = require('express');
 const http = require('http');
 const path = require('path');
@@ -22,7 +24,7 @@ const SESSION_COOKIE = process.env.SESSION_COOKIE_NAME || 'session';
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true } });
+const io = new Server(server, { allowRequest:(req,done)=>{const origin=req.headers.origin;const same=origin===process.env.CLIENT_URL||origin===`http://${req.headers.host}`||(process.env.NODE_ENV==='production'&&origin===`https://${req.headers.host}`);done(null,!origin||same);}, cors: { origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true } });
 
 const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -32,7 +34,12 @@ const OTP_PEPPER = process.env.OTP_PEPPER || SECRET;
 
 const prisma = new PrismaClient();
 const operations = require('./admin-operations').createOperations(prisma);
+app.disable('x-powered-by');
+app.use(security.protections);
 app.use(operations.monitor);
+const reliability=require('./reliability').createReliability({prisma,redis});
+app.use(reliability.monitor);
+const staffSecurity=require('./staff-security').createStaffSecurity({prisma,secret:SECRET,reviewMode,sessionCookie:SESSION_COOKIE});
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const reactions = require('./reactions');
 const { getCampusOnlineUserIds, canJoinIdentityRoom } = require('./presence');
@@ -215,6 +222,7 @@ async function sessionAuth(req, res, next) {
       user=await prisma.user.findUnique({where:{id:user.id},include:{campus:true}});
     }
     req.user = user;
+    req.authIssuedAt = p.iat;
     req.restricted = Boolean(accountUnavailable(user));
     next();
   } catch {
@@ -229,74 +237,13 @@ function auth(req,res,next) {
   });
 }
 
-function addAdminToEnvFile(email) {
-  try {
-    const envPath = path.resolve(__dirname, '../.env');
-    if (fs.existsSync(envPath)) {
-      let content = fs.readFileSync(envPath, 'utf8');
-      const envAdmins = (process.env.ADMIN_EMAILS || '')
-        .split(',')
-        .map(e => e.trim().toLowerCase())
-        .filter(Boolean);
-      if (!envAdmins.includes(email)) {
-        envAdmins.push(email);
-        process.env.ADMIN_EMAILS = envAdmins.join(',');
-        if (/^ADMIN_EMAILS=.*$/m.test(content)) {
-          content = content.replace(/^ADMIN_EMAILS=.*$/m, `ADMIN_EMAILS="${process.env.ADMIN_EMAILS}"`);
-        } else {
-          content += `\nADMIN_EMAILS="${process.env.ADMIN_EMAILS}"\n`;
-        }
-        fs.writeFileSync(envPath, content, 'utf8');
-      }
-    }
-  } catch (e) {
-    console.error('Failed to update .env with new admin:', e);
-  }
-}
-
-function removeAdminFromEnvFile(email) {
-  try {
-    const envPath = path.resolve(__dirname, '../.env');
-    if (fs.existsSync(envPath)) {
-      let content = fs.readFileSync(envPath, 'utf8');
-      const envAdmins = (process.env.ADMIN_EMAILS || '')
-        .split(',')
-        .map(e => e.trim().toLowerCase())
-        .filter(e => e && e !== email);
-      process.env.ADMIN_EMAILS = envAdmins.join(',');
-      content = content.replace(/^ADMIN_EMAILS=.*$/m, `ADMIN_EMAILS="${process.env.ADMIN_EMAILS}"`);
-      fs.writeFileSync(envPath, content, 'utf8');
-    }
-  } catch (e) {
-    console.error('Failed to update .env:', e);
-  }
-}
-
-async function isAdminUser(user) {
-  if (!user || !user.email) return false;
-  const email = user.email.toLowerCase().trim();
-
-  const excludedAdmins = await redis.getExcludedAdminEmails();
-  if (excludedAdmins.includes(email)) return false;
-
-  const envAdminEmails = (process.env.ADMIN_EMAILS || '')
-    .split(',')
-    .map(e => e.trim().toLowerCase())
-    .filter(Boolean);
-
-  if (envAdminEmails.includes(email)) return true;
-
-  const dynamicModerators = await redis.getModeratorEmails();
-  return dynamicModerators.includes(email);
-}
-
-function isPlatformAdmin(user) {
-  return Boolean(user?.email && (process.env.ADMIN_EMAILS||'').split(',').map(e=>e.trim().toLowerCase()).includes(user.email.toLowerCase()));
-}
+async function isAdminUser(user) { return Boolean(await staffSecurity.access(user)); }
+function isPlatformAdmin(user) { return user?.staffRole === 'super_admin'; }
 async function requireAdmin(req, res, next) {
   return auth(req, res, async () => {
     try {
       if (!await isAdminUser(req.user)) return res.status(403).json({error:'Administrator access required.'});
+      if(!await staffSecurity.requireSession(req,res))return;
       req.isAdmin=true;
       req.isPlatformAdmin=isPlatformAdmin(req.user);
       const selected=req.get('X-Afterclass-Campus')||req.query.campusId||req.user.campusId;
@@ -313,7 +260,7 @@ async function requireAdmin(req, res, next) {
 
 async function requireVerified(req, res, next) {
   return auth(req, res, async () => {
-    if (req.user.isVerified || await isAdminUser(req.user)) {
+    if (req.user.isVerified) {
       return next();
     }
     return res.status(403).json({ error: 'Identity verification required. Complete your live face check to proceed.' });
@@ -377,10 +324,12 @@ app.post('/api/auth/send-otp', async (req, res) => {
   if (!campus) return res.status(400).json({ error: 'Use an email from a supported university.' });
   const maxOtpPerHour = process.env.NODE_ENV === 'production' ? 5 : 50;
   if (!await redis.limit('otp:send:' + email, maxOtpPerHour, 3600000)) return res.status(429).json({ error: 'Too many codes requested. Try again later.' });
+  if(!await redis.limit('otp:ip:'+req.ip,process.env.NODE_ENV==='production'?20:100,3600000))return res.status(429).json({error:'Too many sign-in attempts from this connection. Try later.'});
+  if(process.env.NODE_ENV==='production'&&!resend)return res.status(503).json({error:'Email sign-in is temporarily unavailable.'});
   const code = String(crypto.randomInt(100000, 1000000));
   try { await deliverOtp(email, code); } catch (err) { return res.status(503).json({ error: err.message }); }
   // Store OTP hash + campus slug + gender in Redis with 10-minute TTL
-  await redis.setOtp(email, { codeHash: hashOtp(email, code), campusId: campus.id, gender });
+  try{await redis.setAuthOtp(email, { codeHash: hashOtp(email, code), campusId: campus.id, gender });}catch{return res.status(503).json({error:'Sign-in is temporarily unavailable. Please retry.'});}
   const isDevWithoutResend = process.env.NODE_ENV !== 'production' && !process.env.RESEND_API_KEY;
   if (isDevWithoutResend) console.info(`[DEV OTP] ${email}: ${code}`);
   res.json({ ok: true, campus: campus.name, ...(isDevWithoutResend ? { developmentCode: code } : {}) });
@@ -390,9 +339,8 @@ app.post('/api/auth/verify-otp', async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
   const code = String(req.body.code || '').trim();
   if (!await redis.limit('otp:verify:' + email, 10, 600000)) return res.status(429).json({ error: 'Too many verification attempts. Request a new code.' });
-  const otp = await redis.getOtp(email);
-  if (!otp || otp.codeHash !== hashOtp(email, code)) return res.status(400).json({ error: 'That code is invalid or expired.' });
-  await redis.delOtp(email);
+  const otp = await redis.consumeOtp(email, hashOtp(email, code));
+  if (!otp) return res.status(400).json({ error: 'That code is invalid or expired.' });
   // Resolve campus UUID from the slug stored in the OTP
   const dbCampus = await prisma.campus.findUnique({ where: { slug: otp.campusId } });
   if (!dbCampus) return res.status(400).json({ error: 'Campus unavailable.' });
@@ -866,9 +814,10 @@ function closeConnectionMatch(m) {
   io.in(m.roomId).socketsLeave(m.roomId);
   for (const id of [m.userOneId,m.userTwoId]) io.to('user:'+id).emit('match:cancelled', {matchId:m.id});
 }
+staffSecurity.register(app,auth);
 registerConnections({app,prisma,auth,requireAdmin,io,closeMatch:closeConnectionMatch});
-const hearingService=registerHearings({app,prisma,sessionAuth,isAdminUser,limit:redis.limit,auditAdmin:operations.audit});
-registerAccountReviews({app,prisma,sessionAuth,auth,isAdminUser,io,limit:redis.limit,hearingService,auditAdmin:operations.audit});
+const hearingService=registerHearings({app,prisma,sessionAuth,isAdminUser,limit:redis.limit,auditAdmin:operations.audit,requireStaffSession:staffSecurity.requireSession});
+registerAccountReviews({app,prisma,sessionAuth,auth,isAdminUser,io,limit:redis.limit,hearingService,auditAdmin:operations.audit,requireStaffSession:staffSecurity.requireSession});
 
 // Review login is only available with the isolated loopback database and explicit flag.
 app.get('/api/review', (req,res)=>res.json({enabled:reviewMode}));
@@ -1261,6 +1210,7 @@ app.post('/api/reports', auth, async (req, res) => {
   }
 });
 
+reliability.register(app,requireAdmin);
 operations.register({app,auth,requireAdmin,isAdminUser,redis});
 
 app.get('/api/admin/analytics',requireAdmin,async(req,res)=>{
@@ -1398,14 +1348,9 @@ app.post('/api/admin/users/:id/action', requireAdmin, async (req, res) => {
 // Admin Team / Moderator Access Management
 app.get('/api/admin/moderators', requireAdmin, async (req, res) => {
   try {
-  const excludedAdmins = await redis.getExcludedAdminEmails();
-  const envAdmins = (process.env.ADMIN_EMAILS || '')
-    .split(',')
-    .map(e => e.trim().toLowerCase())
-    .filter(e => e && !excludedAdmins.includes(e));
-  const dynamicModerators = await redis.getModeratorEmails();
-  const teamModerators = dynamicModerators.filter(e => !excludedAdmins.includes(e));
-
+  const grants=await prisma.$queryRaw`SELECT email,role FROM staff_access WHERE revoked_at IS NULL`;
+  const envAdmins=grants.filter(x=>x.role==='super_admin').map(x=>x.email);
+  const teamModerators=grants.filter(x=>x.role==='moderator').map(x=>x.email);
   const members=await prisma.user.findMany({where:{campusId:req.adminCampusId,email:{in:[...envAdmins,...teamModerators]}},select:{email:true}});
   const allowed=new Set(members.map(u=>u.email));
   res.json({primaryAdmins:envAdmins.filter(e=>allowed.has(e)),teamModerators:teamModerators.filter(e=>allowed.has(e)).map(email=>({email,addedAt:null}))});
@@ -1423,16 +1368,9 @@ app.post('/api/admin/moderators', requireAdmin, async (req, res) => {
   const member=await prisma.user.findFirst({where:{email,campusId:req.adminCampusId},select:{id:true}});
   if(!member)return res.status(400).json({error:'Choose a registered account in the selected college.'});
   if(!['moderator','super_admin'].includes(role))return res.status(400).json({error:'Invalid staff role.'});
-  await redis.removeExcludedAdminEmail(email);
-
-  if (role === 'super_admin') {
-    addAdminToEnvFile(email);
-    await redis.removeModeratorEmail(email);
-    return res.json({ ok: true, email, role: 'super_admin', message: `${email} is now a Permanent Primary Super Admin 👑` });
-  }
-
-  await redis.addModeratorEmail(email);
-  res.json({ ok: true, email, role: 'moderator', message: `${email} added as Team Moderator 🛡️` });
+  if(email===req.user.email.toLowerCase())return res.status(400).json({error:'Ask another owner to change your role.'});
+  await staffSecurity.changeAccess(req.user,email,role);
+  res.json({ok:true,email,role});
   } catch { res.status(503).json({error:'Unable to load or update staff. Please retry.'}); }
 });
 
@@ -1446,21 +1384,7 @@ app.delete('/api/admin/moderators/:email', requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'You cannot remove your own administrative access to prevent accidental lockout.' });
   }
 
-  const envAdminEmails = (process.env.ADMIN_EMAILS || '')
-    .split(',')
-    .map(e => e.trim().toLowerCase())
-    .filter(Boolean);
-
-  if (envAdminEmails.includes(email)) {
-    if (envAdminEmails.length <= 1) {
-      return res.status(400).json({ error: 'At least one Primary System Administrator must remain on the platform.' });
-    }
-    removeAdminFromEnvFile(email);
-    await redis.removeModeratorEmail(email);
-    return res.json({ ok: true, email, message: `Primary administrator ${email} removed successfully.` });
-  }
-
-  await redis.removeModeratorEmail(email);
+  await staffSecurity.changeAccess(req.user,email);
   res.json({ ok: true, email });
   } catch { res.status(503).json({error:'Unable to load or update staff. Please retry.'}); }
 });
@@ -1508,14 +1432,10 @@ app.post('/api/verify/selfie', auth, async (req, res) => {
       return res.status(400).json({ error: 'Live selfie photo is required.' });
     }
 
-    const match = imageBase64.match(/^data:image\/(webp|jpeg|png);base64,(.+)$/);
-    const rawData = match ? match[2] : imageBase64;
-    const ext = (match && match[1] === 'png') ? 'png' : (match && match[1] === 'jpeg' ? 'jpg' : 'webp');
-
-    const buffer = Buffer.from(rawData, 'base64');
-    if (buffer.length > 2 * 1024 * 1024) {
-      return res.status(400).json({ error: 'Photo is too large. Please allow the camera tool to compress.' });
-    }
+    if(!await redis.limit('selfie:'+req.user.id,5,3600000))return res.status(429).json({error:'Please wait before submitting another photo.'});
+    let buffer;
+    try{buffer=await security.normalizeSelfie(imageBase64);}catch(e){return res.status(400).json({error:e.message});}
+    const ext='webp';
 
     if (req.user.verificationPhoto) {
       const oldPath = path.join(VERIFICATION_DIR, req.user.verificationPhoto);
@@ -1592,6 +1512,7 @@ app.get('/api/admin/verifications/photo/:filename', requireAdmin, async (req, re
 // 4. Approve verification & lock gender (Admin only)
 app.post('/api/admin/verifications/:id/approve', requireAdmin, async (req, res) => {
   try {
+    if(req.params.id===req.user.id)return res.status(403).json({error:'Another reviewer must verify your account.'});
     const target = await prisma.user.findUnique({
       where: { id: req.params.id },
       include: { campus: true }
@@ -1646,11 +1567,6 @@ app.post('/api/admin/verifications/:id/reject', requireAdmin, async (req, res) =
       verificationPhoto: null
     };
 
-    if (req.body.correctGender && ['man', 'woman', 'non_binary'].includes(req.body.correctGender)) {
-      updateData.gender = req.body.correctGender;
-      updateData.genderLocked = true;
-    }
-
     const updated = await prisma.user.update({
       where: { id: target.id },
       data: updateData,
@@ -1667,37 +1583,7 @@ app.post('/api/admin/verifications/:id/reject', requireAdmin, async (req, res) =
   }
 });
 
-// 6. Instant Admin Self-Verification (Admin only)
-app.post('/api/admin/self-verify', requireAdmin, async (req, res) => {
-  try {
-    const validGenders = ['woman', 'man', 'nonbinary', 'prefer_not_to_say'];
-    const chosenGender = validGenders.includes(req.body.gender) ? req.body.gender : (req.user.gender || 'prefer_not_to_say');
-
-    // Delete any pending photo
-    if (req.user.verificationPhoto) {
-      const p = path.join(VERIFICATION_DIR, req.user.verificationPhoto);
-      if (fs.existsSync(p)) fs.unlink(p, () => {});
-    }
-
-    const updated = await prisma.user.update({
-      where: { id: req.user.id },
-      data: {
-        verificationStatus: 'approved',
-        isVerified: true,
-        gender: chosenGender,
-        genderLocked: true,
-        verifiedAt: new Date(),
-        verificationPhoto: null
-      },
-      include: { campus: true }
-    });
-
-    res.json({ ok: true, user: publicUser(updated) });
-  } catch (err) {
-    console.error('Admin self-verification error:', err);
-    res.status(500).json({ error: 'Could not self-verify admin account.' });
-  }
-});
+app.post('/api/admin/self-verify', requireAdmin, (req,res)=>res.status(410).json({error:'Self-verification is no longer supported. Ask an independent reviewer.'}));
 
 // ── Socket.IO ───────────────────────────────────────────────────────────────
 
@@ -1817,13 +1703,14 @@ io.on('connection', socket => {
   });
 
   // Campus-wide broadcast message (persisted to Prisma)
-  socket.on('campus:message', async ({ content, replyTo }, ack = () => {}) => {
-    if (!user.isVerified && !await isAdminUser(user)) {
-      return ack({ error: 'Identity verification required. Complete your live face check to send messages.' });
-    }
-    if (!content?.trim()) return ack({ error: 'Message cannot be empty.' });
+  socket.on('campus:message', async (input, ack = () => {}) => {
+    const {content,replyTo}=input||{};
+    if(typeof ack!=='function') ack=()=>{};
+    if (typeof content!=='string'||!content.trim()||content.length>2000) return ack({ error: 'Send a message between 1 and 2,000 characters.' });
     try {
-      if(!await currentSocketAccount(user)) return ack({error:'Account unavailable.'});
+      const current=await currentSocketAccount(user);
+      if(!current?.isVerified) return ack({error:'Account unavailable or verification required.'});
+      if(!await redis.limit('chat:'+user.id,30,60000))return ack({error:'Please wait before sending more messages.'});
       const room = await campusRoom(user);
       const cleaned = clean(content);
       let finalContent = cleaned;
@@ -1845,35 +1732,22 @@ io.on('connection', socket => {
   });
 
   // Private match-room message (persisted to Prisma, scoped to verified participants)
-  socket.on('message:send', async ({ roomId, content }, ack = () => {}) => {
-    if (!user.isVerified && !await isAdminUser(user)) {
-      return ack({ error: 'Identity verification required. Complete your live face check to send messages.' });
-    }
-    if (!content?.trim()) return ack({ error: 'Message cannot be empty.' });
-    const match = await prisma.match.findFirst({
-      where: { roomId, OR: [{ userOneId: user.id }, { userTwoId: user.id }], status: MatchStatus.active }
-    });
-    if (!match || await connectionPolicy.isBlocked(prisma,match.userOneId,match.userTwoId) || !await currentSocketAccount(user)) return ack({ error: 'Room unavailable.' });
-    const cleaned = clean(content);
-    const expiresAt = match.disappearingMode ? new Date(Date.now() + 24 * 60 * 60 * 1000) : null;
-    const message = await prisma.message.create({
-      data: {
-        roomId,
-        senderId: user.id,
-        senderAlias: user.publicAlias,
-        content: cleaned,
-        isFiltered: cleaned !== content.trim(),
-        expiresAt
-      }
-    });
-    
-    // Check if peer is connected in the room
-    const roomSockets = io.sockets.adapter.rooms.get(roomId);
-    const peerOnline = roomSockets && roomSockets.size > 1;
-    const payload = { ...publicMessage(message), status: peerOnline ? 'delivered' : 'sent' };
-    
-    io.to(roomId).emit('message:new', payload);
-    ack({ ok: true, message: payload });
+  socket.on('message:send', async (input, ack = () => {}) => {
+    const {roomId,content}=input||{};
+    if(typeof ack!=='function') ack=()=>{};
+    if(typeof roomId!=='string'||typeof content!=='string'||!content.trim()||content.length>2000)return ack({error:'Send a message between 1 and 2,000 characters.'});
+    try {
+      const current=await currentSocketAccount(user);
+      if(!current?.isVerified)return ack({error:'Account unavailable or verification required.'});
+      if(!await redis.limit('chat:'+user.id,30,60000))return ack({error:'Please wait before sending more messages.'});
+      const match=await prisma.match.findFirst({where:{roomId,OR:[{userOneId:user.id},{userTwoId:user.id}],status:MatchStatus.active}});
+      if(!match||await connectionPolicy.isBlocked(prisma,match.userOneId,match.userTwoId))return ack({error:'Room unavailable.'});
+      const cleaned=clean(content);
+      const message=await prisma.message.create({data:{roomId,senderId:user.id,senderAlias:user.publicAlias,content:cleaned,isFiltered:cleaned!==content.trim(),expiresAt:match.disappearingMode?new Date(Date.now()+24*60*60*1000):null}});
+      const roomSockets=io.sockets.adapter.rooms.get(roomId);
+      const payload={...publicMessage(message),status:roomSockets&&roomSockets.size>1?'delivered':'sent'};
+      io.to(roomId).emit('message:new',payload);ack({ok:true,message:payload});
+    } catch {ack({error:'Private chat is unavailable.'});}
   });
 
   // Reaction toggle on a message (broadcasts updated tallies to room)
@@ -2016,7 +1890,10 @@ app.get('*', (req, res) => {
 setInterval(runEphemeralChatCleanup, 60 * 60 * 1000);
 runEphemeralChatCleanup();
 
-server.listen(PORT, HOST, () => console.log(`Afterclass API listening on http://${HOST}:${PORT}`));
+staffSecurity.bootstrap(redis).then(()=>{
+  reliability.start();
+  server.listen(PORT, HOST, () => console.log(`Afterclass API listening on http://${HOST}:${PORT}`));
+}).catch(error=>{console.error('Staff access initialization failed:',error.code||error.message);process.exit(1);});
 
 
 
