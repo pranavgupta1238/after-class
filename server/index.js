@@ -288,17 +288,23 @@ async function isAdminUser(user) {
   return dynamicModerators.includes(email);
 }
 
+function isPlatformAdmin(user) {
+  return Boolean(user?.email && (process.env.ADMIN_EMAILS||'').split(',').map(e=>e.trim().toLowerCase()).includes(user.email.toLowerCase()));
+}
 async function requireAdmin(req, res, next) {
-  if (req.headers['x-admin-key'] && req.headers['x-admin-key'] === process.env.ADMIN_KEY) {
-    return next();
-  }
   return auth(req, res, async () => {
-    const admin = await isAdminUser(req.user);
-    if (!admin) {
-      return res.status(403).json({ error: 'Access denied: Admin privileges required.' });
-    }
-    req.isAdmin = true;
-    next();
+    try {
+      if (!await isAdminUser(req.user)) return res.status(403).json({error:'Administrator access required.'});
+      req.isAdmin=true;
+      req.isPlatformAdmin=isPlatformAdmin(req.user);
+      const selected=req.get('X-Afterclass-Campus')||req.query.campusId||req.user.campusId;
+      if(typeof selected!=='string'||!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(selected))return res.status(400).json({error:'Invalid college.'});
+      if(!req.isPlatformAdmin&&selected!==req.user.campusId)return res.status(403).json({error:'This college is outside your moderator access.'});
+      if(!await prisma.campus.findUnique({where:{id:selected},select:{id:true}}))return res.status(404).json({error:'College not found.'});
+      req.adminCampusId=selected;
+      res.set('Cache-Control','no-store');
+      next();
+    }catch(error){res.status(503).json({error:'Unable to verify administrator access. Please retry.'});}
   });
 }
 
@@ -739,6 +745,8 @@ app.get('/api/me', sessionAuth, async (req, res) => {
   if (p) {
     p.email = req.user.email;
     p.isAdmin = !req.restricted && await isAdminUser(req.user);
+    p.isPlatformAdmin=p.isAdmin&&isPlatformAdmin(req.user);
+    if(p.isAdmin)p.adminCampusId=req.user.campusId;
     try {
       const latestWarning = await prisma.moderationAction.findFirst({
         where: { userId: req.user.id, type: 'warning' },
@@ -1250,12 +1258,22 @@ app.post('/api/reports', auth, async (req, res) => {
   }
 });
 
+app.get('/api/admin/analytics',requireAdmin,async(req,res)=>{
+  try{
+    const {analyticsWindow,analytics}=require('./admin-analytics');
+    const all=req.query.scope==='all';
+    if(all&&!req.isPlatformAdmin)return res.status(403).json({error:'Platform administrator access required.'});
+    const result=await analytics(prisma,all?null:req.adminCampusId,analyticsWindow(req.query.days));
+    res.json({...result,platformAdmin:req.isPlatformAdmin,selectedCampusId:all?null:req.adminCampusId});
+  }catch(err){res.status(err.status||500).json({error:err.status?err.message:'Unable to load analytics. Please retry.'});console.error('[Admin analytics]',err.message);}
+});
+
 // ── Admin & Moderation Portal Endpoints ─────────────────────────────────────
 
 app.get('/api/admin/reports', requireAdmin, async (req, res) => {
   try {
     res.set('Cache-Control', 'no-store');
-    res.json({ reports: await adminReports.listReports(prisma) });
+    res.json({ reports: await adminReports.listReports(prisma, req.adminCampusId) });
   } catch (err) {
     console.error('[Admin Reports Fetch Error]:', err);
     res.status(500).json({ error: 'Failed to retrieve incident reports.' });
@@ -1268,7 +1286,7 @@ app.get('/api/admin/reports/:id/context', requireAdmin, async (req, res) => {
   }
   try {
     res.set('Cache-Control', 'no-store');
-    const context = await adminReports.reportContext(prisma, req.params.id);
+    const context = await adminReports.reportContext(prisma, req.params.id, req.adminCampusId);
     if (!context) return res.status(404).json({ error: 'Report not found.' });
     res.json(context);
   } catch (err) {
@@ -1288,9 +1306,9 @@ app.post('/api/admin/reports/:id/action', requireAdmin, async (req, res) => {
     });
     if (!report) return res.status(404).json({ error: 'Report not found.' });
 
-    if(!req.user || report.campusId!==req.user.campusId)return res.status(403).json({error:'Sign in as a moderator for this campus.'});
+    if(!req.user || report.campusId!==req.adminCampusId)return res.status(403).json({error:'Sign in as a moderator for this campus.'});
     if(['timeout_user','ban_user'].includes(action)){
-      await restrictAccount(prisma,{userId:report.reportedUserId,actor:req.user,action:action==='ban_user'?'ban':'suspension',body:req.body,reportId});
+      await restrictAccount(prisma,{userId:report.reportedUserId,actor:{...req.user,campusId:req.adminCampusId},action:action==='ban_user'?'ban':'suspension',body:req.body,reportId});
       io.to('user:'+report.reportedUserId).emit('account:restricted');
       io.in('user:'+report.reportedUserId).disconnectSockets(true);
       return res.json({ok:true,action,status:'resolved'});
@@ -1322,9 +1340,9 @@ app.post('/api/admin/users/:id/action', requireAdmin, async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: userId }, include: { campus: true } });
     if (!user) return res.status(404).json({ error: 'Student not found.' });
 
-    if(!req.user || user.campusId!==req.user.campusId)return res.status(403).json({error:'Sign in as a moderator for this campus.'});
+    if(!req.user || user.campusId!==req.adminCampusId)return res.status(403).json({error:'Sign in as a moderator for this campus.'});
     if(['timeout','ban'].includes(action)){
-      await restrictAccount(prisma,{userId,actor:req.user,action:action==='ban'?'ban':'suspension',body:req.body});
+      await restrictAccount(prisma,{userId,actor:{...req.user,campusId:req.adminCampusId},action:action==='ban'?'ban':'suspension',body:req.body});
       io.to('user:'+userId).emit('account:restricted');io.in('user:'+userId).disconnectSockets(true);
       return res.json({ok:true,action,userId});
     }
@@ -1374,6 +1392,7 @@ app.post('/api/admin/users/:id/action', requireAdmin, async (req, res) => {
 
 // Admin Team / Moderator Access Management
 app.get('/api/admin/moderators', requireAdmin, async (req, res) => {
+  try {
   const excludedAdmins = await redis.getExcludedAdminEmails();
   const envAdmins = (process.env.ADMIN_EMAILS || '')
     .split(',')
@@ -1382,21 +1401,23 @@ app.get('/api/admin/moderators', requireAdmin, async (req, res) => {
   const dynamicModerators = await redis.getModeratorEmails();
   const teamModerators = dynamicModerators.filter(e => !excludedAdmins.includes(e));
 
-  res.json({
-    primaryAdmins: envAdmins,
-    teamModerators: teamModerators.map(email => ({
-      email,
-      addedAt: new Date().toISOString()
-    }))
-  });
+  const members=await prisma.user.findMany({where:{campusId:req.adminCampusId,email:{in:[...envAdmins,...teamModerators]}},select:{email:true}});
+  const allowed=new Set(members.map(u=>u.email));
+  res.json({primaryAdmins:envAdmins.filter(e=>allowed.has(e)),teamModerators:teamModerators.filter(e=>allowed.has(e)).map(email=>({email,addedAt:null}))});
+  } catch { res.status(503).json({error:'Unable to load or update staff. Please retry.'}); }
 });
 
 app.post('/api/admin/moderators', requireAdmin, async (req, res) => {
+  try {
+  if(!req.isPlatformAdmin)return res.status(403).json({error:'Only platform administrators can manage staff.'});
   const email = String(req.body.email || '').trim().toLowerCase();
   const role = String(req.body.role || 'moderator').trim().toLowerCase();
   if (!email || !email.includes('@')) {
     return res.status(400).json({ error: 'Please enter a valid email address.' });
   }
+  const member=await prisma.user.findFirst({where:{email,campusId:req.adminCampusId},select:{id:true}});
+  if(!member)return res.status(400).json({error:'Choose a registered account in the selected college.'});
+  if(!['moderator','super_admin'].includes(role))return res.status(400).json({error:'Invalid staff role.'});
   await redis.removeExcludedAdminEmail(email);
 
   if (role === 'super_admin') {
@@ -1407,9 +1428,13 @@ app.post('/api/admin/moderators', requireAdmin, async (req, res) => {
 
   await redis.addModeratorEmail(email);
   res.json({ ok: true, email, role: 'moderator', message: `${email} added as Team Moderator 🛡️` });
+  } catch { res.status(503).json({error:'Unable to load or update staff. Please retry.'}); }
 });
 
 app.delete('/api/admin/moderators/:email', requireAdmin, async (req, res) => {
+  try {
+  if(!req.isPlatformAdmin)return res.status(403).json({error:'Only platform administrators can manage staff.'});
+  if(!await prisma.user.findFirst({where:{email:req.params.email.toLowerCase(),campusId:req.adminCampusId},select:{id:true}}))return res.status(404).json({error:'Staff member not found in this college.'});
   const email = String(req.params.email || '').trim().toLowerCase();
 
   if (req.user && req.user.email?.toLowerCase() === email) {
@@ -1432,6 +1457,7 @@ app.delete('/api/admin/moderators/:email', requireAdmin, async (req, res) => {
 
   await redis.removeModeratorEmail(email);
   res.json({ ok: true, email });
+  } catch { res.status(503).json({error:'Unable to load or update staff. Please retry.'}); }
 });
 
 // Legacy moderation routes fallback — now strictly protected by requireAdmin
@@ -1517,7 +1543,7 @@ app.post('/api/verify/selfie', auth, async (req, res) => {
 app.get('/api/admin/verifications', requireAdmin, async (req, res) => {
   try {
     const pendingUsers = await prisma.user.findMany({
-      where: { verificationStatus: 'pending' },
+      where: { verificationStatus: 'pending', campusId:req.adminCampusId },
       include: { campus: true },
       orderBy: { verificationSubmittedAt: 'asc' }
     });
@@ -1531,7 +1557,7 @@ app.get('/api/admin/verifications', requireAdmin, async (req, res) => {
       verificationGesture: u.verificationGesture || 'peace_sign',
       submittedAt: u.verificationSubmittedAt,
       hasPhoto: Boolean(u.verificationPhoto),
-      photoUrl: u.verificationPhoto ? `/api/admin/verifications/photo/${u.verificationPhoto}` : null
+      photoUrl: u.verificationPhoto ? `/api/admin/verifications/photo/${u.verificationPhoto}?campusId=${req.adminCampusId}` : null
     }));
 
     res.json({ count: list.length, verifications: list });
@@ -1542,7 +1568,11 @@ app.get('/api/admin/verifications', requireAdmin, async (req, res) => {
 });
 
 // 3. Serve ephemeral verification photo (Admin only)
-app.get('/api/admin/verifications/photo/:filename', requireAdmin, (req, res) => {
+app.get('/api/admin/verifications/photo/:filename', requireAdmin, async (req, res) => {
+  try {
+    const owner=await prisma.user.findFirst({where:{verificationPhoto:req.params.filename,campusId:req.adminCampusId},select:{id:true}});
+    if(!owner)return res.status(404).send('Verification photo unavailable.');
+  } catch { return res.status(503).send('Unable to load verification photo.'); }
   const filename = path.basename(req.params.filename);
   if (!filename.startsWith('verify_')) {
     return res.status(400).send('Invalid file requested.');
@@ -1561,7 +1591,7 @@ app.post('/api/admin/verifications/:id/approve', requireAdmin, async (req, res) 
       where: { id: req.params.id },
       include: { campus: true }
     });
-    if (!target) return res.status(404).json({ error: 'Student not found.' });
+    if (!target || target.campusId!==req.adminCampusId) return res.status(404).json({ error: 'Student not found.' });
 
     // Instantly delete selfie from disk!
     if (target.verificationPhoto) {
@@ -1597,7 +1627,7 @@ app.post('/api/admin/verifications/:id/reject', requireAdmin, async (req, res) =
       where: { id: req.params.id },
       include: { campus: true }
     });
-    if (!target) return res.status(404).json({ error: 'Student not found.' });
+    if (!target || target.campusId!==req.adminCampusId) return res.status(404).json({ error: 'Student not found.' });
 
     // Instantly delete selfie from disk!
     if (target.verificationPhoto) {

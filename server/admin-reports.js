@@ -1,7 +1,8 @@
 const { campusReportCoverage } = require('./report-coverage');
 
-async function listReports(prisma) {
+async function listReports(prisma, campusId) {
   const rawReports = await prisma.report.findMany({
+    where: campusId ? {campusId} : {},
     include: {
       reporter: { select: { id: true, campusId: true, publicAlias: true, email: true, campus: { select: { name: true } } } },
       reportedUser: { select: { id: true, campusId: true, publicAlias: true, email: true, accountStatus: true, suspendedUntil: true, avatarConfig: true } },
@@ -83,9 +84,9 @@ async function listReports(prisma) {
   return reports;
 }
 
-async function reportContext(prisma, id) {
+async function reportContext(prisma, id, campusId) {
   const report = await prisma.report.findUnique({ where: { id }, include: { message: true } });
-  if (!report) return null;
+  if (!report || (campusId && report.campusId!==campusId)) return null;
   let before = [];
   let after = [];
   if (report.message && report.message.roomId) {
