@@ -1,7 +1,11 @@
 /* Appearance is local to this browser. Artwork keeps its original colours. */
 :root { color-scheme:light; --surface-soft:#f1f3eb; --accent-text:#244d42; --focus:#647c61; }
-.appearance-control { display:inline-flex;flex:none; }
-.appearance-control select { width:100px;min-height:40px;font-size:13px; }
+button.appearance-control { display:inline-flex;align-items:center;justify-content:center;flex:none;width:40px;height:40px;padding:0;border:1px solid var(--line);border-radius:50%;background:transparent;color:var(--ink);cursor:pointer; }
+button.appearance-control:hover { background:var(--surface-soft); }
+button.appearance-control:focus-visible { outline:2px solid var(--accent-text);outline-offset:3px; }
+.appearance-control svg { width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round; }
+.appearance-control .appearance-sun,html[data-theme=dark] .appearance-control .appearance-moon { display:none; }
+html[data-theme=dark] .appearance-control .appearance-sun { display:block; }
 .appearance-settings>p { color:var(--muted);font-size:13px; }
 .appearance-options { display:flex;gap:12px;margin-top:20px; }
 .appearance-options button { flex:1;min-width:0;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);padding:12px;font:500 13px 'DM Sans',sans-serif;cursor:pointer; }
@@ -75,7 +79,6 @@ html[data-theme=dark] .ac-plan[data-category=play] .ac-plan-cover { --activity-b
 html[data-theme=dark] :is(.ac-plan-emblem,.ac-save,.ac-plan-status) { background:#ffffff12;border-color:#ffffff25; }
 html[data-theme=dark] :is(.staff-qr-frame,.college-logo-official) { background:#fff; }
 @media(max-width:800px) {
-  .appearance-control select { width:84px;padding-left:9px;padding-right:26px;background-position:right 8px center; }
   .experience-toolbar .toolbar-actions { gap:7px; }
   .appearance-options { gap:8px; }.appearance-options button { padding:9px; }
   .auth-top-nav .auth-campus-badge { display:none; }

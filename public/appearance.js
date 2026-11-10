@@ -11,7 +11,11 @@
     document.documentElement.style.colorScheme = mode;
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', mode === 'dark' ? '#141d1a' : '#f8f7f1');
     document.querySelectorAll('[data-appearance]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.appearance === preference)));
-    document.querySelectorAll('[data-appearance-select]').forEach(select => { select.value = preference; });
+    document.querySelectorAll('[data-appearance-toggle]').forEach(button => {
+      const label = mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+      button.setAttribute('aria-label', label);
+      button.setAttribute('title', label);
+    });
     window.dispatchEvent(new CustomEvent('appearancechange', { detail: { preference, mode } }));
   }
   window.afterclassAppearance = {
