@@ -15,6 +15,10 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # The schema lives outside Prisma's default directory. Generate its
+      # client and enums before tests import the matching services.
+      - name: Generate Prisma client
+        run: npm run db:generate
       - run: npm test
       - run: npm run build
       - run: node --check server/index.js
