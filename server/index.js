@@ -34,6 +34,7 @@ const SECRET = process.env.JWT_SECRET || 'local-development-secret-change-me';
 const OTP_PEPPER = process.env.OTP_PEPPER || SECRET;
 
 const prisma = new PrismaClient();
+const pushNotifications=require('./notifications').createNotifications({prisma,redis,reviewMode});
 const operations = require('./admin-operations').createOperations(prisma);
 app.disable('x-powered-by');
 app.use(security.protections);
@@ -325,8 +326,8 @@ app.get('/api/health', async (req, res) => {
 
 app.get('/health', async (req, res) => {
   if (!validHealthSecret(req.get('x-health-secret'))) return res.status(401).json({ status: 'unauthorized' });
-  try { await prisma.$queryRaw`SELECT 1`; res.json({ status: 'ok', db: 'connected' }); }
-  catch { res.status(503).json({ status: 'unavailable', db: 'disconnected' }); }
+  const health=await require('./health').checkHealth({prisma,redis});
+  res.set('Cache-Control','no-store').status(health.status==='ok'?200:503).json(health);
 });
 
 // ── Auth ────────────────────────────────────────────────────────────────────
@@ -1168,6 +1169,8 @@ app.post('/api/reports', auth, async (req, res) => {
 });
 
 reliability.register(app,requireAdmin);
+pushNotifications.register(app,auth,sessionAuth);
+require('./action-centre').registerActionCentre({app,prisma,requireAdmin,pushReady:pushNotifications.ready});
 operations.register({app,auth,requireAdmin,isAdminUser,redis});
 registerCampusManagement({app,prisma,requireAdmin,io});
 
@@ -1856,6 +1859,7 @@ runEphemeralChatCleanup();
 
 staffSecurity.bootstrap(redis).then(()=>{
   reliability.start();
+  pushNotifications.start();
   server.listen(PORT, HOST, () => console.log(`Afterclass API listening on http://${HOST}:${PORT}`));
 }).catch(error=>{console.error('Staff access initialization failed:',error.code||error.message);process.exit(1);});
 

@@ -14,7 +14,10 @@
     "db:seed": "node server/prisma/seed.js",
     "test": "node --test tests/*.test.mjs",
     "review": "node scripts/review.cjs",
-    "review:hearing-reset": "node scripts/review-hearing.cjs --reset"
+    "review:hearing-reset": "node scripts/review-hearing.cjs --reset",
+    "ops:probe": "node scripts/health-probe.cjs",
+    "ops:backup": "node scripts/recovery.cjs backup",
+    "ops:restore-drill": "node scripts/recovery.cjs drill"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
@@ -28,7 +31,8 @@
     "resend": "^6.25.0",
     "sharp": "^0.35.5",
     "socket.io": "^4.8.1",
-    "socket.io-client": "^4.8.1"
+    "socket.io-client": "^4.8.1",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "prisma": "^6.19.0",

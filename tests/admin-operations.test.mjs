@@ -52,8 +52,13 @@ test('admin operations database and access boundaries',{skip:process.env.RUN_ADM
    const audit=await call(root,'/admin/operations/audit');assert.ok(audit.data.events.some(x=>x.operation==='case.assignment'&&x.metadata.to===reviewer.id));assert.ok(!JSON.stringify(audit.data).includes('@ops.invalid'));
    assert.equal((await call(root,'/admin/operations/audit?before=invalid')).status,400);
   });
+  await t.test('action centre exposes scoped counts without report contents',async()=>{
+   const r=await call(reviewer,'/admin/action-centre');assert.equal(r.status,200);assert.equal(r.data.reports.total,1);assert.equal(r.data.reports.overdue,1);assert.equal(r.data.reports.unassigned,0);assert.equal(r.data.configuration,null);assert.deepEqual(r.data.alerts,[]);assert.equal(r.data.pilot.length,1);assert.ok(!JSON.stringify(r.data).includes('PRIVATE EVIDENCE'));
+   assert.equal((await call(subject,'/notifications')).data.configured,false);assert.equal((await call(null,'/notifications')).status,401);
+   assert.equal((await call(subject,'/notifications/devices',{body:{endpoint:'http://127.0.0.1'}})).status,503);
+  });
   await t.test('operations scope and service privileges cannot be bypassed',async()=>{
-   for(const path of ['/admin/operations/cohorts','/admin/operations/cases','/admin/operations/audit']){
+   for(const path of ['/admin/operations/cohorts','/admin/operations/cases','/admin/operations/audit','/admin/action-centre']){
     assert.equal((await call(reviewer,path+'?scope=all')).status,403);
     assert.equal((await call(reviewer,path,{college:campuses[1].id})).status,403);
     assert.equal((await call(subject,path)).status,403);

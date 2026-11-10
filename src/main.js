@@ -1,3 +1,4 @@
+import {installPushNotifications} from './push-notifications.js';
 import { installStaffWorkspace } from './staff-workspace.js';
 import {installCampusManagement} from './campus-management.js';
 import { installAdminInsights } from './admin-insights.js';
@@ -52,60 +53,9 @@ function isSoundMuted() {
 }
 
 function updateProfileNotifCard() {
-  const isMuted = isNotificationsMuted();
-  const granted = 'Notification' in window && Notification.permission === 'granted';
-  const isOn = granted && !isMuted;
-
-  const card = document.querySelector('#profile-notif-card');
-  if (card) {
-    card.innerHTML = `
-      <div style="text-align:left;">
-        <strong style="font-size:13.5px;color:var(--ink);display:block;margin-bottom:2px;">Campus Push Alerts</strong>
-        <small style="color:var(--muted);font-size:11.5px;">
-          ${!('Notification' in window) ? 'Not supported on device' : (!granted ? 'Click switch to enable alerts' : (isOn ? 'Power ON · Active alerts' : 'Power OFF · Alerts muted'))}
-        </small>
-      </div>
-      <div class="real-switch-casing ${isOn ? 'on' : 'off'}" onclick="${!granted ? 'requestNotificationPermission()' : 'toggleNotificationsMute()'}" title="${isOn ? 'Switch ON (Click to turn OFF)' : 'Switch OFF (Click to turn ON)'}" role="button" tabindex="0">
-        <div class="real-switch-well">
-          <div class="real-rocker-paddle">
-            <div class="paddle-half paddle-top">
-              <span class="lens-pilot-dot"></span>
-              <span class="debossed-symbol symbol-on">|</span>
-            </div>
-            <div class="paddle-pivot-ridge"></div>
-            <div class="paddle-half paddle-bottom">
-              <span class="debossed-symbol symbol-off">○</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  const settingsNotif = document.querySelector('#settings-notif-card');
-  if (settingsNotif) {
-    settingsNotif.innerHTML = `
-      <div style="text-align:left;">
-        <strong style="font-size:14px;color:var(--ink);display:block;margin-bottom:2px;">Master Push Notifications</strong>
-        <small style="color:var(--muted);font-size:12px;">
-          ${!('Notification' in window) ? 'Not supported on device' : (!granted ? 'Click switch to enable push alerts' : (isOn ? 'Power ON · Alerts active and delivered in real-time' : 'Power OFF · Alerts muted'))}
-        </small>
-      </div>
-      <div class="real-switch-casing ${isOn ? 'on' : 'off'}" onclick="${!granted ? 'requestNotificationPermission()' : 'toggleNotificationsMute()'}" title="${isOn ? 'Switch ON (Click to turn OFF)' : 'Switch OFF (Click to turn ON)'}" role="button" tabindex="0">
-        <div class="real-switch-well">
-          <div class="real-rocker-paddle">
-            <div class="paddle-half paddle-top">
-              <span class="lens-pilot-dot"></span>
-              <span class="debossed-symbol symbol-on">|</span>
-            </div>
-            <div class="paddle-pivot-ridge"></div>
-            <div class="paddle-half paddle-bottom">
-              <span class="debossed-symbol symbol-off">○</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
+  for (const id of ['profile-notif-card', 'settings-notif-card']) {
+    const card = document.getElementById(id);
+    if (card) card.innerHTML = `<div><strong>Notifications</strong><small>Messages, plans and quiet hours</small></div><button class="secondary" onclick="pushSettings.open()">Manage</button>`;
   }
 }
 
@@ -152,54 +102,11 @@ window.clearLocalCache = () => {
   render();
 };
 
-window.toggleNotificationsMute = () => {
-  const muted = isNotificationsMuted();
-  localStorage.setItem('afterclass_notifications_muted', muted ? 'false' : 'true');
-  toast(muted ? '🔔 Campus Push Alerts Unmuted!' : '🔕 Campus Push Alerts Muted');
-  updateProfileNotifCard();
-};
-
-window.requestNotificationPermission = async () => {
-  if (!('Notification' in window)) {
-    return toast('Browser notifications are not supported on this device.');
-  }
-  try {
-    const perm = await Notification.requestPermission();
-    if (perm === 'granted') {
-      localStorage.setItem('afterclass_notifications_muted', 'false');
-      toast('Notifications enabled! You will be alerted on new matches & messages 🔔');
-      if (document.hidden) {
-        triggerNotification('Afterclass Campus Alerts Active ✦', 'You will receive instant alerts for matches, applications, and direct messages.');
-      }
-      updateProfileNotifCard();
-    } else if (perm === 'denied') {
-      toast('Notifications blocked in browser settings.');
-      updateProfileNotifCard();
-    }
-  } catch (err) {
-    console.error('Notification error:', err);
-  }
-};
-
-function triggerNotification(title, body, onClick) {
-  if (!canNotify() || isNotificationsMuted() || !document.hidden) return;
-  try {
-    const n = new Notification(title, {
-      body,
-      icon: '/favicon-32.png',
-      badge: '/favicon-32.png'
-    });
-    if (onClick) {
-      n.onclick = () => {
-        window.focus();
-        onClick();
-        n.close();
-      };
-    }
-  } catch (err) {
-    console.warn('Notification trigger error:', err);
-  }
-}
+window.toggleNotificationsMute = () => window.pushSettings.open();
+window.requestNotificationPermission = () => window.pushSettings.open();
+// Background notifications come from the durable server queue. Avoid duplicate
+// operating-system alerts from the socket path; in-app updates/sounds remain.
+function triggerNotification() {}
 
 async function api(path, options = {}) {
   const r = await fetch(API + path, {
@@ -741,7 +648,7 @@ function layout(content) {
       <aside class="experience-sidebar">
         <a class="brand" href="/" onclick="event.preventDefault();go('home')"><i>✦</i> afterclass<span class="brand-period">.</span></a>
         <div class="campus"><b>${staffView?'Administration':escapeHtml(campusName)}</b>${staffView?`<small>${escapeHtml(state.adminCampusName||campusName)}</small>`:''}</div>${me?.isAdmin&&!staffView?'<button class="staff-entry" onclick="go(\'admin\')">Staff workspace</button>':''}
-        ${staffView?`<nav aria-label="Staff navigation"><button ${staffTab('analytics')} onclick="adminInsights.open(null,null,'analytics')">Dashboard</button>${me.isPlatformAdmin?`<button ${staffTab('colleges')} onclick="adminInsights.open(null,null,'colleges')">Colleges</button>`:''}<button ${staffTab('moderation')} onclick="staffWorkspace.moderation()">Moderation</button><button ${staffTab('pilot')} onclick="staffWorkspace.open('pilot')">Campus pilot</button>${me.isPlatformAdmin?`<button ${staffTab('reliability')} onclick="staffWorkspace.open('reliability')">Reliability & alerts</button>`:''}<button onclick="go('hearings')">Hearings</button><button onclick="go('home')">Back to Afterclass</button></nav>`:`<nav aria-label="Main navigation">${nav.map(([key,label,mobile])=>`<button type="button" data-nav="${key}" class="${state.view===key?'active':''}" ${state.view===key?'aria-current="page"':''} aria-label="${label}" onclick="go('${key}')"><span class="nav-icon" aria-hidden="true">${icons[key]||'◈'}</span><span class="nav-label">${label}</span><span class="nav-mobile-label">${mobile}</span>${key==='inbox'&&inboxCount?`<em aria-label="${inboxCount} incoming interests">${inboxCount}</em>`:''}</button>`).join('')}</nav>`}
+        ${staffView?`<nav aria-label="Staff navigation"><button ${staffTab('actions')} onclick="staffWorkspace.open('actions')">Action centre</button><button ${staffTab('analytics')} onclick="adminInsights.open(null,null,'analytics')">Dashboard</button>${me.isPlatformAdmin?`<button ${staffTab('colleges')} onclick="adminInsights.open(null,null,'colleges')">Colleges</button>`:''}<button ${staffTab('moderation')} onclick="staffWorkspace.moderation()">Moderation</button><button ${staffTab('pilot')} onclick="staffWorkspace.open('pilot')">Campus pilot</button>${me.isPlatformAdmin?`<button ${staffTab('reliability')} onclick="staffWorkspace.open('reliability')">Reliability & alerts</button>`:''}<button onclick="go('hearings')">Hearings</button><button onclick="go('home')">Back to Afterclass</button></nav>`:`<nav aria-label="Main navigation">${nav.map(([key,label,mobile])=>`<button type="button" data-nav="${key}" class="${state.view===key?'active':''}" ${state.view===key?'aria-current="page"':''} aria-label="${label}" onclick="go('${key}')"><span class="nav-icon" aria-hidden="true">${icons[key]||'◈'}</span><span class="nav-label">${label}</span><span class="nav-mobile-label">${mobile}</span>${key==='inbox'&&inboxCount?`<em aria-label="${inboxCount} incoming interests">${inboxCount}</em>`:''}</button>`).join('')}</nav>`}
 
         <button class="sidebar-bottom" onclick="${me?'openAvatarPreview()':"go('auth')"}" aria-label="${me?'Open your profile':'Join your campus'}">${avatar(me?.avatarConfig||username,false,Boolean(me?.isVerified))}<span class="sidebar-profile-copy"><strong>${escapeHtml(username)}</strong><small>${me?(me.isVerified?(me.campusRole==='faculty'?'Verified faculty':'Verified student'):(me.campusRole==='faculty'?'Faculty profile':'Student profile')):'Sign in to get started'}</small></span></button>
       </aside>
@@ -980,7 +887,7 @@ function adminPortal() {
     `);
   }
 
-  if(['pilot','reliability'].includes(state.adminScreen))return window.staffWorkspace.page();
+  if(['pilot','reliability','actions'].includes(state.adminScreen))return window.staffWorkspace.page();
   if(window.adminInsights.screen()!=='moderation')return window.adminInsights.page();
   const tab = state.adminTab || 'reports';
   const filter = state.adminFilter || 'pending';
@@ -2194,12 +2101,12 @@ function settings() {
       ${row('Student verification',me?.isVerified?'Your student profile is verified.':me?.verificationStatus==='pending'?'Your submission is awaiting review.':me?.verificationStatus==='rejected'?'Submit a new photo for review.':'Verify your student profile.',me?.isVerified?'<span class="account-status">Verified</span>':me?`<div class="preference-actions">${me.verificationStatus==='pending'?`<button class="secondary" onclick="loadMe()">Check status</button>`:''}<button class="secondary" onclick="openVerificationModal()">${me.verificationStatus==='pending'?'Retake':'Verify'}</button></div>`:`<button class="secondary" onclick="openAuth()">Sign in</button>`)}
       ${row('Identity sharing','Reveal your identity only when you both agree.',`<button class="link" onclick="go('safety')">Privacy & safety</button>`)}
     </section><section class="preference-group"><h2>Notifications</h2>
-      ${row('Push notifications',!('Notification' in window)?'Not supported in this browser.':Notification.permission==='denied'?'Blocked in browser settings.':'Messages and plan invitations.',`<button class="preference-switch" role="switch" aria-label="Push notifications" aria-checked="${isOn}" onclick="${granted?'toggleSettingsNotifications()':'enableSettingsNotifications()'}" ${!('Notification' in window)?'disabled':''}><span></span></button>`)}
+      ${row('Background notifications','Private messages, invitations, reminders and quiet hours.',`<button class="secondary" onclick="pushSettings.open()">Manage notifications</button>`)}
       ${row('Sound effects','Play sounds for in-app activity.',`<button class="preference-switch" role="switch" aria-label="Sound effects" aria-checked="${soundOn}" onclick="toggleSettingsSound()"><span></span></button>`)}
     </section><section class="preference-group"><h2>Session & device</h2>
       ${row(escapeHtml(device.label),me?'This device · Signed in':'This device · Guest',me?`<button class="secondary" onclick="logout()">Sign out</button>`:`<button class="secondary" onclick="openAuth()">Sign in</button>`)}
       ${me?row('Other devices','End all active sessions.',`<button class="link destructive" onclick="openLogoutAllModal()">Sign out everywhere</button>`):''}
-      ${row('Local preferences','Reset notification and sound preferences.',`<button class="link" onclick="clearLocalCache()">Reset</button>`)}
+      ${row('Local preferences','Reset this browser’s saved preferences. Background notification settings stay unchanged.',`<button class="link" onclick="clearLocalCache()">Reset</button>`)}
     </section></div></div>`);
 }
 
@@ -3892,6 +3799,7 @@ window.verifyOtp = async (e, email) => {
 
 window.logout = async () => {
   try {
+    await pushSettings.detach();
     await api('/auth/logout', { method: 'POST' });
     updateMe(null);
     state.messages = [];
@@ -4893,6 +4801,7 @@ function verificationPage() {
   `;
 }
 
+const pushSettings=installPushNotifications({api,state,escapeHtml});
 const staffWorkspace=installStaffWorkspace({api,state,render,layout,escapeHtml});
 installCampusManagement({api,escapeHtml});
 const adminInsights=installAdminInsights({state,api,render,layout,escapeHtml,resetWorkspace:()=>{adminLoader.reset();contextLoader.reset();Object.assign(state,{adminLoads:{},adminContexts:{},adminReports:[],adminModerators:[],adminPrimaryAdmins:[],adminVerifications:[],adminSelectedUserId:null,adminSearch:'',adminSortBy:'pending',adminSortOrder:'desc',adminFilterAccountStatus:'all',adminFilterWarnings:'all',adminFilterReporters:'all',adminFilterReason:'all',adminFiltersOpen:false,adminTab:'reports',adminFilter:'pending'});}});

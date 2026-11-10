@@ -14,3 +14,18 @@ self.addEventListener('fetch', event => {
     headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }
   })));
 });
+
+self.addEventListener('push', event => event.waitUntil((async()=>{
+ let data;try{data=event.data?.json();}catch{return;}
+ if(!data||data.title!=='Afterclass')return;
+ // Use fixed routes and text payloads; never render remote HTML or external destinations.
+ await self.registration.showNotification('Afterclass',{body:String(data.body||'Open Afterclass to see what’s new.').slice(0,160),icon:'/favicon-32.png',tag:'afterclass-'+String(data.tag||'update'),data:{url:'/inbox'}});
+})()));
+self.addEventListener('notificationclick',event=>{
+ event.notification.close();
+ event.waitUntil((async()=>{
+  const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});
+  for(const client of windows){if(new URL(client.url).origin===self.location.origin){await client.navigate('/inbox');return client.focus();}}
+  return self.clients.openWindow('/inbox');
+ })());
+});
