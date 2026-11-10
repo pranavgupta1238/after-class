@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#fbfcf8">
+  <script src="/appearance.js"></script>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=5">
   <link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABKklEQVR4nO1XOwqDQBBdsLAOXsA2R3BIa+cBLKbKHWw8QvAi1mlSehCLaTyApVWShScsoiH4GwlZeCD7mfd2d5yZNebfFjRhOlloCogsNAVcLbTIQ2EqgFBDQCJMDyDZm/wsTLkwNYD9Pu9FHghT+iYshekJlOgLtib3hSkWppsw1Y6AGn12zN+K3BOmC467csh7VBizc7y1yX0YzoTpLkzdiIAOYxnmrnMSuPMYu7ME7Qh5jxZzcqxZ5hPw9hT3W03sfOwkKqxJZ/0dCDIJdlIOHO5b1Fibw9bnYIXEEiG8FggwzQziIRrYKmA7Gk1g6gLUr2BCiI4TDkTo/YaOCL1A5IjQC8WOCL1k5IjQS8eOCL2CxBGhV5KZIxSlRrssNwd5mOg+zX6ivQDwPHAn4g5LJgAAAABJRU5ErkJggg==">
@@ -21,6 +22,9 @@
     .startup-dots i { width: 4px; height: 4px; border-radius: 50%; background: #527151; animation: startup-breathe 1.6s ease-in-out infinite; }
     .startup-dots i:nth-child(2) { animation-delay: .2s; }
     .startup-dots i:nth-child(3) { animation-delay: .4s; }
+    html[data-theme="dark"] body, html[data-theme="dark"] .startup-screen { background:#141d1a; color:#e6ece5; }
+    html[data-theme="dark"] .startup-mark { background:#283b31; color:#dce4b7; }
+    html[data-theme="dark"] :is(.startup-tagline,.startup-status) { color:#afbab1; }
     @keyframes startup-breathe { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
     @media (prefers-reduced-motion: reduce) { .startup-dots i { animation: none; opacity: .6; } }
   </style>

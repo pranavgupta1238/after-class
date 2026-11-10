@@ -21,6 +21,8 @@ import { emojiCount, playEmojiMoment } from './emoji-moments.mjs';
 import { createAdminLoader } from './admin-loader.mjs';
 import { ACTIVITIES, activityFor, selectPlans, planTime } from './discovery.mjs';
 import 'leaflet/dist/leaflet.css';
+import './appearance.css';
+import { appearanceControl, appearanceSettings } from './appearance.js';
 import L from 'leaflet';
 import { io } from 'socket.io-client';
 import { renderAvatarSvg, renderFullBodyAvatarSvg, renderVerifiedBadgeSvg, AVATAR_OPTIONS, getDeterministicAvatar } from './avatar.js';
@@ -742,7 +744,7 @@ function layout(content) {
         <button class="sidebar-bottom" onclick="${me?'openAvatarPreview()':"go('auth')"}" aria-label="${me?'Open your profile':'Join your campus'}">${avatar(me?.avatarConfig||username,false,Boolean(me?.isVerified))}<span class="sidebar-profile-copy"><strong>${escapeHtml(username)}</strong><small>${me?(me.isVerified?'Verified student': 'Student profile'):'Sign in to get started'}</small></span></button>
       </aside>
       <main id="main-content" tabindex="-1" class="${state.view==='chat'?'chat-main':state.view==='safety'?'safety-main':''}">
-        <div class="experience-toolbar">${staffView?`<div class="toolbar-location"><span class="toolbar-symbol" aria-hidden="true">✳</span><span>Staff workspace</span></div><div class="staff-controls"><button class="secondary" onclick="staffWorkspace.unlock()">Staff security</button><button class="secondary" onclick="staffWorkspace.lock()">Lock workspace</button></div>`:`<div class="toolbar-location"><span class="toolbar-symbol" aria-hidden="true">✳</span><span>${currentLabel}</span></div><a class="mobile-wordmark" href="/" onclick="event.preventDefault();go('home')">✦ afterclass<span>.</span></a>${me?.isAdmin?'<button class="mobile-staff-entry" onclick="go(\'admin\')">Staff</button>':''}<div class="toolbar-actions">${window.hearings?.nav()||''}<button class="toolbar-safety" aria-label="Trust and safety" onclick="go('safety')">${icons.safety}</button><button class="toolbar-create" aria-label="Create a plan" onclick="openComposer()"><span aria-hidden="true">＋</span><span class="toolbar-create-label">New plan</span></button><button class="toolbar-profile" aria-label="Open your profile" onclick="${me?'openAvatarPreview()':"go('auth')"}">${avatar(me?.avatarConfig||username,true,Boolean(me?.isVerified))}</button></div>`}</div>
+        <div class="experience-toolbar">${staffView?`<div class="toolbar-location"><span class="toolbar-symbol" aria-hidden="true">✳</span><span>Staff workspace</span></div><div class="staff-controls">${appearanceControl()}<button class="secondary" onclick="staffWorkspace.unlock()">Staff security</button><button class="secondary" onclick="staffWorkspace.lock()">Lock workspace</button></div>`:`<div class="toolbar-location"><span class="toolbar-symbol" aria-hidden="true">✳</span><span>${currentLabel}</span></div><a class="mobile-wordmark" href="/" onclick="event.preventDefault();go('home')">✦ afterclass<span>.</span></a>${me?.isAdmin?'<button class="mobile-staff-entry" onclick="go(\'admin\')">Staff</button>':''}<div class="toolbar-actions">${appearanceControl()}${window.hearings?.nav()||''}<button class="toolbar-safety" aria-label="Trust and safety" onclick="go('safety')">${icons.safety}</button><button class="toolbar-create" aria-label="Create a plan" onclick="openComposer()"><span aria-hidden="true">＋</span><span class="toolbar-create-label">New plan</span></button><button class="toolbar-profile" aria-label="Open your profile" onclick="${me?'openAvatarPreview()':"go('auth')"}">${avatar(me?.avatarConfig||username,true,Boolean(me?.isVerified))}</button></div>`}</div>
         ${renderWarnedStudentBanner()}${content}
       </main>
     </div><div id="toast" role="status" aria-live="polite" class="toast ${state.toast?'show':''}">${escapeHtml(state.toast)}</div>`;
@@ -2185,7 +2187,7 @@ function settings() {
   const row = (title, description, control) => `<div class="preference-row"><div><strong>${title}</strong><small>${description}</small></div>${control}</div>`;
   return layout(`<section class="portal-heading"><div><h1>Settings</h1></div></section>
     <div class="account-layout"><div class="account-summary">${avatar(me?.avatarConfig || me?.username || 'Guest',false,Boolean(me?.isVerified))}<h2>${escapeHtml(me?.username || 'Guest')}</h2><p>${escapeHtml(me?.university || 'NIIT University')}</p><span class="account-status">${me?.isVerified ? 'Verified student' : me ? 'Student account' : 'Not signed in'}</span><button class="secondary" onclick="${me?'openAvatarPreview()':'openAuth()'}">${me?'View profile':'Sign in'}</button>${me?.isAdmin?`<button class="account-admin" onclick="go('admin')">Moderation workspace</button>`:''}</div>
-    <div class="account-sections">${cx.settings()}<section class="preference-group"><h2>Profile & privacy</h2>
+    <div class="account-sections">${appearanceSettings()}${cx.settings()}<section class="preference-group"><h2>Profile & privacy</h2>
       ${row('Campus alias','Your public name on Afterclass.',`<span>${escapeHtml(me?.username || 'Guest')}</span>`)}
       ${row('Student verification',me?.isVerified?'Your student profile is verified.':me?.verificationStatus==='pending'?'Your submission is awaiting review.':me?.verificationStatus==='rejected'?'Submit a new photo for review.':'Verify your student profile.',me?.isVerified?'<span class="account-status">Verified</span>':me?`<div class="preference-actions">${me.verificationStatus==='pending'?`<button class="secondary" onclick="loadMe()">Check status</button>`:''}<button class="secondary" onclick="openVerificationModal()">${me.verificationStatus==='pending'?'Retake':'Verify'}</button></div>`:`<button class="secondary" onclick="openAuth()">Sign in</button>`)}
       ${row('Identity sharing','Reveal your identity only when you both agree.',`<button class="link" onclick="go('safety')">Privacy & safety</button>`)}
@@ -2221,7 +2223,7 @@ function authPage() {
         <a class="auth-brand-logo" href="#" onclick="go('home')">
           <i>✦</i> afterclass
         </a>
-        <div class="auth-campus-badge">
+        ${appearanceControl()}<div class="auth-campus-badge">
           <span class="auth-pulse-dot"></span>
           <span>VERIFIED CAMPUS NETWORK</span>
         </div>
