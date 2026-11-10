@@ -40,6 +40,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:afterclass_local_review@127.0.0.1:55432/afterclass_review
       DIRECT_URL: postgresql://postgres:afterclass_local_review@127.0.0.1:55432/afterclass_review
+      RUN_CAMPUS_MANAGEMENT_TESTS: '1'
       RUN_STAFF_SECURITY_TESTS: '1'
       RUN_ADMIN_OPERATIONS_TESTS: '1'
       RUN_ADMIN_ANALYTICS_TESTS: '1'
@@ -54,4 +55,4 @@ jobs:
       - run: npm ci
       - run: npm run db:generate
       - run: npm run db:migrate
-      - run: node --test tests/staff-security-integration.test.mjs tests/admin-operations.test.mjs tests/admin-analytics.test.mjs tests/account-review-integration.test.mjs tests/hearings-integration.test.mjs
+      - run: node --test tests/campus-management-integration.test.mjs tests/staff-security-integration.test.mjs tests/admin-operations.test.mjs tests/admin-analytics.test.mjs tests/account-review-integration.test.mjs tests/hearings-integration.test.mjs

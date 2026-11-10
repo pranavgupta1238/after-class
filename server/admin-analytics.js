@@ -9,7 +9,7 @@ function analyticsWindow(value,now=new Date()){
 async function analytics(prisma,campusId,window){
  const {start,end,previousStart}=window;
  // Aggregate in PostgreSQL: no email addresses, message bodies, demographics or evidence leave the database.
- const scope=Prisma.sql`SELECT id,name,status FROM campuses WHERE (${campusId}::uuid IS NULL OR id=${campusId}::uuid)`;
+ const scope=Prisma.sql`SELECT id,name,status,audience,enrollment_open FROM campuses WHERE (${campusId}::uuid IS NULL OR id=${campusId}::uuid)`;
  const events=Prisma.sql`
  SELECT r.campus_id,u.sender_id AS user_id,u.created_at FROM messages u JOIN chat_rooms r ON r.id=u.room_id JOIN scope s ON s.id=r.campus_id WHERE u.created_at>=${previousStart} AND u.created_at<=${end}
  UNION ALL SELECT r.campus_id,r.requester_id,r.created_at FROM match_requests r JOIN scope s ON s.id=r.campus_id WHERE r.created_at>=${previousStart} AND r.created_at<=${end}
@@ -34,7 +34,7 @@ async function analytics(prisma,campusId,window){
  MIN(created_at) FILTER(WHERE status IN ('pending','reviewing')) oldest_report FROM reports WHERE campus_id IN(SELECT id FROM scope) GROUP BY campus_id),
  reviews AS (SELECT a.campus_id,COUNT(*) FILTER(WHERE v.status!='resolved')::int open_reviews FROM account_reviews v JOIN moderation_actions a ON a.id=v.action_id WHERE a.campus_id IN(SELECT id FROM scope) GROUP BY a.campus_id),
  hearings AS (SELECT a.campus_id,COUNT(*)::int upcoming_hearings FROM hearings h JOIN account_reviews v ON v.id=h.review_id JOIN moderation_actions a ON a.id=v.action_id JOIN hearing_slots s ON s.id=h.slot_id WHERE a.campus_id IN(SELECT id FROM scope) AND h.status IN ('scheduled','live') AND s.ends_at>${end} GROUP BY a.campus_id)
- SELECT s.id,s.name,s.status,COALESCE(u.accounts,0) accounts,COALESCE(u.verified,0) verified,COALESCE(u.verification_pending,0) verification_pending,COALESCE(u.signups,0) signups,
+ SELECT s.id,s.name,s.status,s.audience,s.enrollment_open,COALESCE(u.accounts,0) accounts,COALESCE(u.verified,0) verified,COALESCE(u.verification_pending,0) verification_pending,COALESCE(u.signups,0) signups,
  COALESCE(p.plans,0) plans,COALESCE(p.matched_plans,0) matched_plans,COALESCE(p.open_plans,0) open_plans,COALESCE(p.unmatched_past_plans,0) unmatched_past_plans,
  COALESCE(m.matches,0) matches,COALESCE(m.confirmed,0) confirmed,COALESCE(m.completed,0) completed,COALESCE(m.cancelled,0) cancelled,
  COALESCE(r.reports,0) reports,COALESCE(r.pending_reports,0) pending_reports,COALESCE(r.reported_accounts,0) reported_accounts,COALESCE(r.aged_reports,0) aged_reports,COALESCE(r.resolved_reports,0) resolved_reports,r.oldest_report,

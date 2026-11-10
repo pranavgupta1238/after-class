@@ -5,8 +5,8 @@ const prisma = new PrismaClient();
 async function main() {
   const campus = await prisma.campus.upsert({
     where: { slug: 'niit-university' },
-    update: { name: 'NIIT University', emailDomain: 'niituniversity.in', location: 'Neemrana, Rajasthan', status: 'active' },
-    create: { slug: 'niit-university', name: 'NIIT University', emailDomain: 'niituniversity.in', location: 'Neemrana, Rajasthan' }
+    update: {},
+    create: { slug: 'niit-university', name: 'NIIT University', emailDomain: 'niituniversity.in', location: 'Neemrana, Rajasthan', accessPolicy: {domains:[{domain:'st.niituniversity.in',role:'student'},{domain:'niituniversity.in',role:'roster'}],members:[]} }
   });
   await prisma.chatRoom.upsert({
     where: { id: `${campus.id}` },

@@ -110,6 +110,10 @@ model Campus {
   slug        String       @unique
   name        String
   emailDomain String       @unique @map("email_domain")
+  audience String @default("students")
+  enrollmentOpen Boolean @default(true) @map("enrollment_open")
+  accessPolicy Json? @map("access_policy")
+  policyRevision Int @default(1) @map("policy_revision")
   location    String?
   status      CampusStatus @default(active)
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -130,6 +134,8 @@ model User {
   campusId       String        @map("campus_id") @db.Uuid
   email          String        @unique
   publicAlias    String        @map("public_alias")
+  campusRole String @default("student") @map("campus_role")
+  campusEligible Boolean @default(true) @map("campus_eligible")
   revealName     String?       @map("reveal_name")
   gender         Gender        @default(prefer_not_to_say)
   orientation    Orientation   @default(prefer_not_to_say)

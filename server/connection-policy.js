@@ -10,7 +10,7 @@ function ageOn(date, now = new Date()) {
 }
 function datingEligible(user, profile, now = new Date()) {
   // Self-declared birth dates are not independent age assurance. Demo/local only.
-  if (process.env.NODE_ENV === 'production') return false;
+  if (process.env.NODE_ENV === 'production' || (user.campusRole && user.campusRole !== 'student')) return false;
   const age = ageOn(profile?.birthDate, now);
   return eligibleForPairing(user, now.getTime()) && profile?.datingEnabled === true && age >= 18 && age <= 100;
 }

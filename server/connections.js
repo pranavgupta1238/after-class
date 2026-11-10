@@ -12,7 +12,7 @@ function registerConnections({app,prisma,auth,requireAdmin,io,closeMatch}) {
   });
   route('get','/api/connections/me',auth,async(req,res)=>{
     const profile=await prisma.connectionProfile.findUnique({where:{userId:req.user.id}});
-    res.json({profile,options:{interests:policy.INTERESTS,prompts:policy.PROMPTS},datingLaunchReady:process.env.NODE_ENV!=='production',datingEligible:policy.datingEligible(req.user,profile)});
+    res.json({profile,options:{interests:policy.INTERESTS,prompts:policy.PROMPTS},datingLaunchReady:process.env.NODE_ENV!=='production'&&req.user.campusRole!=='faculty',datingEligible:policy.datingEligible(req.user,profile)});
   });
   route('patch','/api/connections/me',auth,async(req,res)=>{
     const profile=await prisma.$transaction(async tx=>{
@@ -25,10 +25,10 @@ function registerConnections({app,prisma,auth,requireAdmin,io,closeMatch}) {
       }
       return tx.connectionProfile.upsert({where:{userId:req.user.id},create:{userId:req.user.id,...data},update:data});
     });
-    res.json({profile,datingLaunchReady:process.env.NODE_ENV!=='production',datingEligible:policy.datingEligible(req.user,profile)});
+    res.json({profile,datingLaunchReady:process.env.NODE_ENV!=='production'&&req.user.campusRole!=='faculty',datingEligible:policy.datingEligible(req.user,profile)});
   });
   route('post','/api/connections/availability',auth,async(req,res)=>{
-    if(!eligibleForPairing(req.user)) throw new Error('Complete student verification before sharing availability.');
+    if(!eligibleForPairing(req.user)) throw new Error('Complete account verification before sharing availability.');
     const {minutes,activity='coffee'}=req.body;
     if(![0,30,60,120].includes(minutes) || !['coffee','study','move','play'].includes(activity)) throw new Error('Choose an activity and availability window.');
     const data={availableUntil:minutes?new Date(Date.now()+minutes*60000):null,availabilityActivity:activity};

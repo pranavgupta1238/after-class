@@ -11,7 +11,8 @@ const jwt = require('jsonwebtoken');
 const { Resend } = require('resend');
 const { Server } = require('socket.io');
 const { PrismaClient, RoomKind, MatchStatus, RevealStatus } = require('@prisma/client');
-const campuses = require('./campuses');
+const campusPolicy = require('./campus-policy');
+const {registerCampusManagement} = require('./campus-management');
 const matchService = require('./match-service');
 const { canPair } = require('./match-policy');
 const adminReports = require('./admin-reports');
@@ -88,6 +89,8 @@ function publicUser(u) {
     username: u.publicAlias,
     university: u.campus?.name || 'Unknown',
     campusId: u.campus?.slug || u.campusId,
+    campusRole: u.campusRole,
+    campusAccess: campusPolicy.accessReason(u),
     reputation: u.reputationScore,
     avatarConfig: u.avatarConfig || null,
     gender: u.gender,
@@ -101,6 +104,19 @@ function publicUser(u) {
 
 function token(user) {
   return jwt.sign({ sub: user.id, sv: user.sessionVersion || 0 }, SECRET, { expiresIn: '30d', issuer: 'afterclass', audience: 'afterclass-web' });
+}
+
+// Recheck policy while holding the same transaction lock as university administration.
+async function enrollCampusAccount(email,gender,expectedSlug) {
+  const alias=await generateUsername();
+  return prisma.$transaction(async tx=>{
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(710112026)`;
+    const {campus,role,user}=await campusPolicy.admission(tx,email);
+    if(expectedSlug&&expectedSlug!==campus.slug)throw Object.assign(new Error('University access changed. Request a new sign-in code.'),{status:403});
+    const validGender=['woman','man','nonbinary','prefer_not_to_say'].includes(gender)?gender:'prefer_not_to_say';
+    if(user)return tx.user.update({where:{id:user.id},data:{campusRole:role,campusEligible:campusPolicy.eligible(campus,role),...(user.gender==='prefer_not_to_say'?{gender:validGender}:{})},include:{campus:true}});
+    return tx.user.create({data:{email,campusId:campus.id,campusRole:role,campusEligible:true,publicAlias:alias,gender:validGender,aliases:{create:{alias,rotationReason:'initial'}}},include:{campus:true}});
+  });
 }
 
 function hashOtp(email, code) {
@@ -231,7 +247,13 @@ async function sessionAuth(req, res, next) {
 }
 
 function auth(req,res,next) {
-  return sessionAuth(req,res,()=>{
+  return sessionAuth(req,res,async()=>{
+    const campusError=campusPolicy.accessReason(req.user);
+    if(campusError){
+      const staffRoute=/^\/api\/(admin|staff)(\/|$)/.test(req.path);
+      let owner=false;try{owner=staffRoute&&await isAdminUser(req.user)&&isPlatformAdmin(req.user);}catch{}
+      if(!owner)return res.status(403).json({error:campusError,code:'CAMPUS_ACCESS_DISABLED'});
+    }
     if(req.restricted)return res.status(403).json({error:'Your account is restricted. Open the Review Centre to request a review.'});
     next();
   });
@@ -320,8 +342,8 @@ app.use('/api/auth', (req,res,next)=>{
 app.post('/api/auth/send-otp', async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
   const gender = String(req.body.gender || '').trim();
-  const campus = campuses.fromEmail(email);
-  if (!campus) return res.status(400).json({ error: 'Use an email from a supported university.' });
+  let entry;try{entry=await campusPolicy.admission(prisma,email);}catch(err){return res.status(err.status||503).json({error:err.status?err.message:'University access is temporarily unavailable.'});}
+  const campus=entry.campus;
   const maxOtpPerHour = process.env.NODE_ENV === 'production' ? 5 : 50;
   if (!await redis.limit('otp:send:' + email, maxOtpPerHour, 3600000)) return res.status(429).json({ error: 'Too many codes requested. Try again later.' });
   if(!await redis.limit('otp:ip:'+req.ip,process.env.NODE_ENV==='production'?20:100,3600000))return res.status(429).json({error:'Too many sign-in attempts from this connection. Try later.'});
@@ -329,7 +351,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
   const code = String(crypto.randomInt(100000, 1000000));
   try { await deliverOtp(email, code); } catch (err) { return res.status(503).json({ error: err.message }); }
   // Store OTP hash + campus slug + gender in Redis with 10-minute TTL
-  try{await redis.setAuthOtp(email, { codeHash: hashOtp(email, code), campusId: campus.id, gender });}catch{return res.status(503).json({error:'Sign-in is temporarily unavailable. Please retry.'});}
+  try{await redis.setAuthOtp(email, { codeHash: hashOtp(email, code), campusId: campus.slug, gender });}catch{return res.status(503).json({error:'Sign-in is temporarily unavailable. Please retry.'});}
   const isDevWithoutResend = process.env.NODE_ENV !== 'production' && !process.env.RESEND_API_KEY;
   if (isDevWithoutResend) console.info(`[DEV OTP] ${email}: ${code}`);
   res.json({ ok: true, campus: campus.name, ...(isDevWithoutResend ? { developmentCode: code } : {}) });
@@ -341,37 +363,9 @@ app.post('/api/auth/verify-otp', async (req, res) => {
   if (!await redis.limit('otp:verify:' + email, 10, 600000)) return res.status(429).json({ error: 'Too many verification attempts. Request a new code.' });
   const otp = await redis.consumeOtp(email, hashOtp(email, code));
   if (!otp) return res.status(400).json({ error: 'That code is invalid or expired.' });
-  // Resolve campus UUID from the slug stored in the OTP
-  const dbCampus = await prisma.campus.findUnique({ where: { slug: otp.campusId } });
-  if (!dbCampus) return res.status(400).json({ error: 'Campus unavailable.' });
-  let user = await prisma.user.findUnique({ where: { email }, include: { campus: true } });
-
-  
-  const validGenders = ['woman', 'man', 'nonbinary', 'prefer_not_to_say'];
-  const reqGender = String(req.body.gender || otp.gender || '');
-  const userGender = validGenders.includes(reqGender) ? reqGender : 'prefer_not_to_say';
-
-  if (!user) {
-    const alias = await generateUsername();
-    user = await prisma.user.create({
-      data: {
-        email,
-        campusId: dbCampus.id,
-        publicAlias: alias,
-        gender: userGender,
-        orientation: 'prefer_not_to_say',
-        genderPreference: 'any',
-        reputationScore: 100,
-        accountStatus: 'active',
-        sessionVersion: 0,
-        noShowCount: 0,
-        aliases: { create: { alias, rotationReason: 'initial' } }
-      },
-      include: { campus: true }
-    });
-  } else if (userGender !== 'prefer_not_to_say' && user.gender === 'prefer_not_to_say') {
-    user = await prisma.user.update({ where: { id: user.id }, data: { gender: userGender }, include: { campus: true } });
-  }
+  let user;
+  try {user=await enrollCampusAccount(email,String(req.body.gender||otp.gender||''),otp.campusId);}
+  catch(err){return res.status(err.status||503).json({error:err.status?err.message:'Sign-in is temporarily unavailable.'});}
   res.cookie(SESSION_COOKIE, token(user), { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 2592000000, path: '/' });
   res.json({ user: publicUser(user) });
 });
@@ -607,18 +601,7 @@ app.get('/api/auth/google/callback', async (req, res) => {
       return res.redirect(`/?auth_error=${encodeURIComponent('No email address provided by your Google account.')}`);
     }
 
-    // 3. Verify campus domain
-    const campus = campuses.fromEmail(email);
-    if (!campus) {
-      const allowedDomains = campuses.campuses.map(c => '@' + c.domain).join(', ');
-      return res.redirect(`/?auth_error=${encodeURIComponent(`Access denied: Only verified university accounts (${allowedDomains} or college subdomains) are allowed. (${email} is not registered)`)}`);
-    }
-
-    const dbCampus = await prisma.campus.findUnique({ where: { slug: campus.id } });
-    if (!dbCampus) {
-      return res.redirect(`/?auth_error=${encodeURIComponent('Campus service is currently unavailable.')}`);
-    }
-
+    if(googleUser.verified_email!==true)return res.redirect('/?auth_error='+encodeURIComponent('Verify your university email with Google before signing in.'));
     // 4. Parse state for gender preference
     let preferredGender = 'prefer_not_to_say';
     if (stateParam) {
@@ -631,35 +614,9 @@ app.get('/api/auth/google/callback', async (req, res) => {
       } catch {}
     }
 
-    // 5. Look up or create student user
-    let user = await prisma.user.findUnique({ where: { email }, include: { campus: true } });
-
-
-    if (!user) {
-      const alias = await generateUsername();
-      user = await prisma.user.create({
-        data: {
-          email,
-          campusId: dbCampus.id,
-          publicAlias: alias,
-          gender: preferredGender,
-          orientation: 'prefer_not_to_say',
-          genderPreference: 'any',
-          reputationScore: 100,
-          accountStatus: 'active',
-          sessionVersion: 0,
-          noShowCount: 0,
-          aliases: { create: { alias, rotationReason: 'initial' } }
-        },
-        include: { campus: true }
-      });
-    } else if (preferredGender !== 'prefer_not_to_say' && user.gender === 'prefer_not_to_say') {
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: { gender: preferredGender },
-        include: { campus: true }
-      });
-    }
+    let user;
+    try{user=await enrollCampusAccount(email,preferredGender);}
+    catch(err){return res.redirect('/?auth_error='+encodeURIComponent(err.status?err.message:'University sign-in is temporarily unavailable.'));}
 
     // 6. Set session cookie and redirect to campus chat
     res.cookie(SESSION_COOKIE, token(user), {
@@ -1212,6 +1169,7 @@ app.post('/api/reports', auth, async (req, res) => {
 
 reliability.register(app,requireAdmin);
 operations.register({app,auth,requireAdmin,isAdminUser,redis});
+registerCampusManagement({app,prisma,requireAdmin,io});
 
 app.get('/api/admin/analytics',requireAdmin,async(req,res)=>{
   try{
@@ -1597,7 +1555,7 @@ io.use(async (socket, next) => {
     const raw = socket.handshake.auth.token || socketCookie(socket, SESSION_COOKIE);
     const p = jwt.verify(raw, SECRET, { issuer: 'afterclass', audience: 'afterclass-web' });
     const user = await prisma.user.findUnique({ where: { id: p.sub }, include: { campus: true } });
-    if (accountUnavailable(user) || p.sv !== (user.sessionVersion || 0)) throw new Error('Unauthorized');
+    if (accountUnavailable(user) || campusPolicy.accessReason(user) || p.sv !== (user.sessionVersion || 0)) throw new Error('Unauthorized');
     socket.user = user;
     next();
   } catch {
@@ -1624,12 +1582,18 @@ async function mayUsePrivateRoom(user,roomId) {
   return m && !await connectionPolicy.isBlocked(prisma,m.userOneId,m.userTwoId) ? m : null;
 }
 async function currentSocketAccount(user) {
-  const current=await prisma.user.findUnique({where:{id:user.id}});
-  return current && current.accountStatus==='active' && !accountUnavailable(current) && current.sessionVersion===user.sessionVersion ? current : null;
+  const current=await prisma.user.findUnique({where:{id:user.id},include:{campus:true}});
+  return current && current.accountStatus==='active' && !accountUnavailable(current) && !campusPolicy.accessReason(current) && current.sessionVersion===user.sessionVersion ? current : null;
 }
 
 io.on('connection', socket => {
   const user = socket.user;
+  // Recheck access on every incoming event, including already-connected sessions.
+  socket.use(async (_packet, next) => {
+    try { if (await currentSocketAccount(user)) return next(); } catch { /* Fail closed. */ }
+    socket.disconnect(true);
+    next(new Error('Account access changed. Sign in again.'));
+  });
   socket.join('user:' + user.id);
   socket.join('campus:' + user.campus.slug);
   broadcastCampusPresence(user.campus.slug);

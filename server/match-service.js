@@ -19,7 +19,7 @@ function publicRequest(request, userId) {
 // Uses user.campusId (Prisma UUID) directly — no campus slug lookup needed.
 async function createRequest(prisma, user, data) {
   const currentUser = await prisma.user.findUnique({ where: { id: user.id } });
-  if (!eligibleForPairing(currentUser)) throw new Error('Complete student verification and select man or woman before creating a one-to-one plan.');
+  if (!eligibleForPairing(currentUser)) throw new Error('Complete account verification and select man or woman before creating a one-to-one plan.');
   const mode=data.connectionMode || 'social';
   if (!['social','dating'].includes(mode)) throw new Error('Choose a valid connection mode.');
   if(mode==='dating') {
