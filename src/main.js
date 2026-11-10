@@ -1,3 +1,4 @@
+import { installAdminInsights } from './admin-insights.js';
 import { installHearings } from './hearings.js';
 import { installReviewCentre } from './review-centre.js';
 import { installConnections } from './connections.js';
@@ -199,8 +200,8 @@ function triggerNotification(title, body, onClick) {
 async function api(path, options = {}) {
   const r = await fetch(API + path, {
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    ...options
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...(path.startsWith('/admin/') && state.adminCampusId ? {'X-Afterclass-Campus':state.adminCampusId} : {}), ...(options.headers || {}) }
   });
   const contentType = r.headers.get('content-type') || '';
   let data;
@@ -256,8 +257,9 @@ function setCachedUser(user) {
 
 function updateMe(user) {
   if(state.me?.id !== user?.id)window.hearings?.reset();
-  if (!user?.isAdmin || state.me?.id !== user.id) {
+  if (!user?.isAdmin || state.me?.id !== user.id || Boolean(state.me?.isPlatformAdmin)!==Boolean(user.isPlatformAdmin)) {
     window.reviewCentre?.reset();
+    window.adminInsights?.reset();
     adminLoader.reset();
     contextLoader.reset();
     state.adminLoads = {};
@@ -710,7 +712,7 @@ window.dismissWarningNotice = () => {
 function layout(content) {
   const me = state.me;
   const nav = [['home','Home','Home'],['discover','Discover','Explore'],['chat','Campus chat','Chat'],['inbox','Inbox','Inbox'],['safety','Trust & safety','Safety'],['settings','Settings','You']];
-  if (me?.isAdmin) nav.push(['admin','Moderation','Admin']);
+  if (me?.isAdmin) nav.push(['admin',me.isPlatformAdmin?'Administration':'Moderation','Admin']);
   const username = me?.username || 'Your campus awaits';
   const campusName = me?.university || 'NIIT University';
   const inboxCount = state.pendingApplications.length;
@@ -960,6 +962,7 @@ function adminPortal() {
     `);
   }
 
+  if(window.adminInsights.screen()!=='moderation')return window.adminInsights.page();
   const tab = state.adminTab || 'reports';
   const filter = state.adminFilter || 'pending';
   const reports = state.adminReports || [];
@@ -1116,11 +1119,13 @@ function adminPortal() {
 
   return layout(`
     <div class="admin-portal-wrapper">
+      ${window.adminInsights.navigation()}
       <section class="admin-header-card">
         <div class="admin-header-left">
 
-          <h1 class="admin-title">Moderation</h1><button class="secondary" onclick="reviewCentre.open(null,true)">Account reviews</button><button class="link" onclick="cx.adminAppeals()">Verification appeals</button>
-          <p class="workspace-subtitle">${escapeHtml(me.university || 'NIIT University')} · Review workspace</p>
+          <h1 class="admin-title">Moderation</h1>
+          <p class="workspace-subtitle">${escapeHtml(state.adminCampusName || me.university || 'Your college')} · Review workspace</p>
+          ${!state.adminCampusId||state.adminCampusId===me.adminCampusId?'<div class="admin-context-links"><button onclick="reviewCentre.open(null,true)">Account reviews</button><button onclick="cx.adminAppeals()">Verification appeals</button></div>':'<p class="workspace-subtitle">Appeal decisions and hearings are handled by the college’s assigned reviewers.</p>'}
         </div>
         <div class="admin-header-actions">
           <button type="button" class="admin-btn-secondary" onclick="loadAdminData()" title="Reload reports and staff list">
@@ -1293,7 +1298,7 @@ function adminPortal() {
       ` : !state.adminLoads[tab]?.loaded ? `<div class="admin-empty-state" role="status"><p>${state.adminLoads[tab]?.error ? escapeHtml(state.adminLoads[tab].error) : 'Loading…'}</p>${state.adminLoads[tab]?.error ? '<button class="secondary" onclick="loadAdminData()">Retry</button>' : ''}</div>` : tab === 'verifications' ? `
         ${renderAdminVerificationsPanel()}
       ` : `
-        <div class="admin-team-panel" style="display:flex;flex-direction:column;gap:16px;">
+        <div class="admin-team-panel ${me.isPlatformAdmin?'':'campus-team-readonly'}" style="display:flex;flex-direction:column;gap:16px;">
           <div class="admin-team-card" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
               <div>
@@ -1318,7 +1323,7 @@ function adminPortal() {
                 style="flex: 1; min-width: 200px; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font: 600 12.5px 'DM Sans'; background: #fff; color: var(--ink); cursor: pointer;"
               >
                 <option value="moderator">Moderator</option>
-                <option value="super_admin">Permanent owner</option>
+                <option value="super_admin">Platform administrator (all colleges)</option>
               </select>
               <button type="submit" class="admin-btn-primary" style="white-space:nowrap;padding:10px 18px;font-weight:600;">
                 + Grant Access
@@ -1326,7 +1331,7 @@ function adminPortal() {
             </form>
             <div style="display:flex;gap:16px;margin-top:10px;font-size:11.5px;color:var(--muted);flex-wrap:wrap;">
               <span>• <b>Team Moderator:</b> Can review incident reports and student selfies (can be revoked anytime).</span>
-              <span>• <b>Permanent Root Owner:</b> Un-removable super admin configured permanently into system settings.</span>
+              <span>• <b>Platform administrator:</b> Access to all colleges and staff management.</span>
             </div>
           </div>
 
@@ -1353,7 +1358,7 @@ function adminPortal() {
                   <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#fbfcf9;border:1px solid var(--line);border-radius:8px;flex-wrap:wrap;gap:8px;">
                     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                       <strong style="font-size:13px;color:var(--ink);">${escapeHtml(email)}</strong>
-                      <span style="background:#fef3c7;color:#92400e;font:700 10.5px 'DM Sans';padding:2px 7px;border-radius:4px;">Primary Super Admin</span>
+                      <span style="background:#fef3c7;color:#92400e;font:700 10.5px 'DM Sans';padding:2px 7px;border-radius:4px;">Platform administrator</span>
                       ${isSelf ? '<span style="background:#ecfdf5;color:#047857;font:600 10.5px \'DM Sans\';padding:2px 6px;border-radius:4px;">You</span>' : ''}
                     </div>
                     ${isSelf ? `
@@ -1396,14 +1401,14 @@ function adminPortal() {
               <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
                 ${teamModerators.map(mod => {
                   const modEmail = typeof mod === 'string' ? mod : mod.email;
-                  const modDate = mod.addedAt ? new Date(mod.addedAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently';
+                  const modDate = mod.addedAt ? new Date(mod.addedAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : null;
                   const isSelf = modEmail.toLowerCase() === (me?.email || '').toLowerCase();
                   return `
                   <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#fbfcf9;border:1px solid var(--line);border-radius:8px;flex-wrap:wrap;gap:8px;">
                     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                       <strong style="font-size:13px;color:var(--ink);">${escapeHtml(modEmail)}</strong>
                       <span style="background:#e0f2fe;color:#0369a1;font:700 10.5px 'DM Sans';padding:2px 7px;border-radius:4px;">Team Moderator</span>
-                      <small style="color:var(--muted);font-size:11.5px;">Added ${modDate}</small>
+                      <small style="color:var(--muted);font-size:11.5px;">${modDate?'Added '+modDate:'College moderator'}</small>
                     </div>
                     ${isSelf ? `
                       <span style="background:#f1f5f9;color:#64748b;font:600 11px 'DM Sans';padding:4px 10px;border-radius:6px;">Current Session</span>
@@ -1958,6 +1963,7 @@ const adminLoader = createAdminLoader({
 
 window.loadAdminData = (force = true) => {
   if (!state.me?.isAdmin) return Promise.resolve();
+  if(window.adminInsights?.screen()!=='moderation')return window.adminInsights?.load(force);
   if (force) {
     contextLoader.reset();
     state.adminContexts = {};
@@ -4925,6 +4931,7 @@ function verificationPage() {
   `;
 }
 
+const adminInsights=installAdminInsights({state,api,render,layout,escapeHtml,resetWorkspace:()=>{adminLoader.reset();contextLoader.reset();Object.assign(state,{adminLoads:{},adminContexts:{},adminReports:[],adminModerators:[],adminPrimaryAdmins:[],adminVerifications:[],adminSelectedUserId:null,adminSearch:'',adminSortBy:'pending',adminSortOrder:'desc',adminFilterAccountStatus:'all',adminFilterWarnings:'all',adminFilterReporters:'all',adminFilterReason:'all',adminFiltersOpen:false,adminTab:'reports',adminFilter:'pending'});}});
 const cx = installConnections({state,api,modal,closeModal:()=>window.closeModal(),render,toast:t=>window.toast(t),escapeHtml,avatar,loadDiscover,loadInbox,openComposer});
 const reviewCentre = installReviewCentre({state,api,layout,render,escapeHtml,icons,modal,closeModal:()=>window.closeModal(),loadMe});
 const hearings = installHearings({state,api,layout,render,escapeHtml,loadMe});

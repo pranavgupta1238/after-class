@@ -28,6 +28,7 @@ async function seed(){
     await db.verificationAppeal.create({data:{userId:users[5].id,reason:'My camera was blurry during the check. Could I try again in better light?'}});
   }
   await require('./review-hearing.cjs').seedReviewHearing(db);
+  await require('./review-colleges.cjs').seedReviewColleges(db);
   await db.$disconnect();
 }
 (async()=>{
