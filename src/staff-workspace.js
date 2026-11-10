@@ -10,10 +10,34 @@ export function installStaffWorkspace({api,state,render,layout,escapeHtml:e}) {
   try{
    const status=await api('/staff/session');
    if(status.active){body.innerHTML=`<p>${status.reviewMode?'Isolated demo: staff authentication is bypassed for testing.':'Your staff session is already unlocked.'}</p><button class="primary">Continue</button>`;body.querySelector('button').onclick=()=>{dialog.close();render();};return;}
-   body.innerHTML=`${!status.enrolled?'<p>Add Afterclass to your authenticator app using a setup key.</p><button class="secondary" id="staff-enrol">Get setup key</button><div id="staff-setup"></div>':''}<form><label>${status.enrolled?'Authenticator or recovery code':'Authenticator code'}<input name="code" autocomplete="one-time-code" inputmode="text" maxlength="16" required aria-label="Authenticator code"></label><button class="primary" type="submit">Unlock workspace</button></form>`;
-   body.querySelector('#staff-enrol')?.addEventListener('click',async event=>{event.target.disabled=true;try{const result=await api('/staff/enrol',{method:'POST',body:'{}'});body.querySelector('#staff-setup').innerHTML=`<p class="staff-secret"><code>${e(result.secret)}</code></p><p>Choose a time-based, six-digit code in your app. Save the recovery codes shown after verification.</p>`;}catch(err){failure(err);event.target.disabled=false;}});
+   if(!status.enrolled){
+    dialog.querySelector('h2').textContent='Secure your staff account';
+    dialog.querySelector('h2 + p').textContent='Set up your authenticator once. Then use its six-digit code whenever you unlock the workspace.';
+   }
+   body.innerHTML=`${!status.enrolled?'<p>Open your authenticator app on your phone and choose <strong>Add account → Scan QR code</strong>.</p><button class="secondary" id="staff-enrol" type="button">Show setup QR code</button><div id="staff-setup"></div>':''}<form ${!status.enrolled?'hidden':''}><label>${status.enrolled?'Authenticator or recovery code':'2. Enter the code from your app'}<input name="code" autocomplete="one-time-code" inputmode="${status.enrolled?'text':'numeric'}" maxlength="${status.enrolled?16:6}" ${!status.enrolled?'pattern="[0-9]{6}" placeholder="000000"':''} required aria-label="Authenticator code" aria-describedby="staff-code-help"></label><small id="staff-code-help">${status.enrolled?'Enter the current six-digit code, or one unused recovery code.':'Enter the six-digit number shown in your app, not the setup key.'}</small><button class="primary" type="submit">${status.enrolled?'Unlock workspace':'Verify and continue'}</button></form>`;
+   body.querySelector('#staff-enrol')?.addEventListener('click',async event=>{
+    const button=event.currentTarget,setup=body.querySelector('#staff-setup'),form=body.querySelector('form');
+    button.disabled=true;button.textContent='Preparing QR code…';setup.replaceChildren();form.hidden=true;dialog.querySelector('.staff-error').textContent='';
+    try{
+     const result=await api('/staff/enrol',{method:'POST',body:'{}'});
+     if(!dialog.isConnected)return;
+     setup.innerHTML=`<section class="staff-qr-setup"><h3>1. Scan with your authenticator</h3><div class="staff-qr-frame" role="status"><span>Creating QR code…</span></div><p class="staff-setup-hint">This setup expires in 10 minutes. Keep your QR code and setup key private.</p><details class="staff-manual"><summary>Can’t scan? Use the setup key</summary><p>In your authenticator, choose <strong>Enter setup key</strong>. Name it <strong>Afterclass</strong> and select <strong>Time-based</strong>.</p><code class="staff-secret">${e(result.secret)}</code><button class="secondary staff-copy-key" type="button">Copy setup key</button><span class="staff-copy-status" role="status"></span></details></section>`;
+     setup.querySelector('.staff-copy-key').onclick=async()=>{const message=setup.querySelector('.staff-copy-status');try{await navigator.clipboard.writeText(result.secret);message.textContent='Copied. Paste this into your authenticator app.';}catch{message.textContent='Select the setup key above and copy it manually.';}};
+     try{
+      const {default:QRCode}=await import('qrcode');
+      if(!dialog.isConnected)return;
+      const canvas=document.createElement('canvas');
+      canvas.setAttribute('role','img');canvas.setAttribute('aria-label','Afterclass authenticator setup QR code');
+      await QRCode.toCanvas(canvas,result.uri,{width:240,margin:4,errorCorrectionLevel:'M',color:{dark:'#000000',light:'#ffffff'}});
+      setup.querySelector('.staff-qr-frame').replaceChildren(canvas);
+     }catch{setup.querySelector('.staff-qr-frame').textContent='QR code unavailable. Use the setup key below.';setup.querySelector('details').open=true;}
+     button.textContent='Generate a new QR code';form.hidden=false;form.reset();
+    }catch(err){failure(err);button.textContent='Retry setup';}
+    finally{button.disabled=false;}
+   });
    body.querySelector('form').onsubmit=async event=>{event.preventDefault();const btn=event.currentTarget.querySelector('button');btn.disabled=true;try{const result=await api('/staff/verify',{method:'POST',body:JSON.stringify({code:new FormData(event.currentTarget).get('code')})});if(result.recoveryCodes){body.innerHTML=`<h3>Save your recovery codes</h3><p>Each works once. Store them in your password manager. They will not be shown again.</p><pre>${result.recoveryCodes.map(e).join('\n')}</pre><button class="primary">I’ve saved them</button>`;body.querySelector('button').onclick=()=>location.reload();}else location.reload();}catch(err){failure(err);btn.disabled=false;}};
-   body.querySelector('input')?.focus();
+   if(status.enrolled)body.querySelector('input')?.focus();
+   else body.querySelector('#staff-enrol')?.focus();
   }catch(err){failure(err);body.textContent='Sign in with your staff account and try again.';}
  }
  async function load(force=false){const wanted=`${state.me?.id}:${state.adminCampusId}:${state.adminScreen}`;if(busy||(!force&&key===wanted&&data))return;key=wanted;busy=true;error='';data=null;
