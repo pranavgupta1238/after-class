@@ -1,91 +1,56 @@
-# Stage 9 — Web Push Notifications, Mobile PWA & Production Launch Readiness
+# Stage 9 — Notifications and launch operations
 
-This document outlines the native browser notifications engine, audio synthesizer, Progressive Web App (PWA) configuration, zero-flicker skeleton hydration, and production deployment architecture.
+Updated 2026-11-10. Implementation is available locally; this is not a production-launch certificate.
 
----
+## Background notifications
 
-## 1. Overview & Launch Scope
+Settings → Notifications → Manage notifications lets a signed-in account opt in, choose private messages and plan updates, set quiet hours with an IANA time zone, test delivery, or remove devices. Browser permission is requested only when the user enables delivery. The isolated review build never sends external push.
 
-Stage 9 elevates Afterclass from a functional web prototype to an installable, production-ready campus platform with native operating system integrations:
+`server/notifications.js` sends Web Push through the browser's provider. Configure VAPID keys and a contact subject in the server environment. The private key must never enter a Vite variable. HTTPS is required outside localhost; browser and operating-system support varies. On iOS, Web Push requires an installed Home Screen web app.
 
-- **Instant Browser Push Notifications**: Real-time operating system alerts for plan applications, message replies, and mutual identity reveals.
-- **Mobile Progressive Web App (PWA)**: Installable directly to iOS and Android home screens with native full-screen app shells and standalone display modes.
-- **Zero-Flicker Skeleton Hydration**: YouTube-style blurry shimmer skeleton eliminating flashes of unauthenticated content during refresh.
-- **Enterprise Multi-Cloud Deployment**: Production configurations supporting Oracle Cloud VM (PM2 + Nginx reverse proxy), Railway, and Vercel.
+Database triggers enqueue private-message, invitation, accepted-match and meeting-revision events in the same transaction as the event. The worker adds reminders for mutually confirmed meetings starting within 30 minutes. It claims batches with row locks, retries transient failures up to four attempts, removes expired endpoints and retains delivery history for 30 days. Delivery is at least once: a process crash after provider acceptance but before recording it can cause a retry; a stable notification tag replaces duplicates where the browser supports it.
 
----
+Delivery rechecks current account/campus access, verification, session version, blocks, preferences and source state. Quiet hours defer work; expiry prevents late alerts. Generic notifications omit aliases, message text, evidence and locations. Already accepted notifications cannot be recalled from a device. Account sign-out tries to unsubscribe this browser; global session revocation suppresses queued deliveries.
 
-## 2. Native Push Notifications & Audio Synthesizer
+The service worker handles `push` and `notificationclick`; clicks open the same-origin inbox. The former tab-only OS notifications are disabled to avoid duplicate alerts. In-app socket updates and sound remain separate. Provider acceptance is **not** evidence of device delivery or a person reading it.
 
-### Browser Push & Notification Dispatcher (`src/main.js`)
-- Requests native OS notification permissions via `Notification.requestPermission()`.
-- Dispatches formatted notifications with campus icon badge and click-to-open routing:
-  - Plan application received: `💬 [Applicant] applied to your plan` &rarr; opens `/inbox`.
-  - Private DM message received: `💬 Message from [Companion]` &rarr; opens chat.
-  - Identity revealed: `🎉 Mutual Identity Reveal Unlocked!` &rarr; triggers celebration view.
+## Action centre
 
-### Zero-Latency Embedded Audio Synthesizer (`src/audio.js`)
-- Native Web Audio API (`AudioContext`) generating soft, harmonious chime alerts without downloading heavy MP3/WAV assets:
-  - `playSendSound()`: Upward rising acoustic chime (frequency curve 587 Hz &rarr; 880 Hz).
-  - `playReceiveSound()`: Gentle incoming campus notification tone (784 Hz &rarr; 1046 Hz).
-- Zero network latency; operates reliably in offline and poor mobile signal states.
+Administration → Action centre shows scoped open/overdue/unassigned reports, pending appeals and verification tasks, operational incidents, device-delivery outcomes, and per-campus pilot preparation. College staff cannot request another college or the global scope. Only platform administrators see network incident/configuration summaries. Existing dashboard charts and case-assignment tools remain accessible.
 
-### Tactile Notification Controls (`src/style.css`)
-- Section 3 of **Settings** includes an ultra-realistic 3D skeuomorphic mechanical rocker switch:
-  - 3D perspective rocking paddle with realistic shadows.
-  - Luminous emerald LED pilot light indicator when ON.
-  - Controls both audio playback and push notifications reactively.
+## Health and external alerts
 
----
+Use the protected `/health` endpoint with `x-health-secret`. It checks PostgreSQL and configured Redis concurrently with bounded waits, returning HTTP 503 when a required dependency is unavailable. `/api/health` is a legacy liveness route, not the readiness signal.
 
-## 3. Mobile Progressive Web App (PWA)
+`scripts/health-probe.cjs` must run on an **independent machine** to detect failure of the application host. Configure its private env file with `AFTERCLASS_HEALTH_URL`, `HEALTH_SECRET`, `HEALTH_PROBE_STATE`, `RESEND_API_KEY`, `RESEND_FROM`, and `OPERATIONS_ALERT_EMAIL`.
 
-Configured for native mobile installation without requiring app store downloads:
-
-- **Manifest (`public/manifest.webmanifest`)**:
-  - `display: standalone`: Hides Safari/Chrome browser URL bars, providing a full-screen native mobile app feel.
-  - `theme_color: #fbfcf8`: Blends with campus paper aesthetic.
-  - High-DPI icons: `icon-192.png`, `icon-512.png`, `apple-touch-icon.png`.
-- **Touch Gesture Engine**:
-  - WhatsApp-style pull-to-right swipe-to-reply on chat bubbles.
-  - Touch-optimized sticky bottom navigation bar on mobile viewports (`@media (max-width: 800px)`).
-
----
-
-## 4. Zero-Flicker & YouTube-Style Skeleton Loading
-
-To eliminate the Flash of Unauthenticated Content (FOUS) on page reloads or rapid **Cmd+R** refreshes:
-
-1. **Pre-Hydration Critical Skeleton (`index.html`)**:
-   - Embedded directly inside `<div id="app">` with critical inline CSS in `<head>`.
-   - Browser paints the layout skeleton on millisecond 0 before JavaScript executes.
-2. **Blurry Shimmer Effect (`.sk-box`)**:
-   - Soft blurry edges (`filter: blur(0.3px)`) with smooth sweeping gradient animation (`@keyframes ytShimmer`).
-   - Mirrors YouTube and Linear layout boxes (sidebar items, chat title, message bubbles, composer pill).
-3. **Session Cache & Safe Boot**:
-   - `state.view` initializes from the current route pathname (`getInitialBootView()`), never defaulting to `'auth'`.
-   - `loadMe()` distinguishes between explicit `401 Unauthorized` responses and aborted requests, preventing Cmd+R from kicking users to the "Start for Free" screen.
-
----
-
-## 5. Production Deployment Architecture
-
-The codebase is hardened for scalable cloud production deployment:
-
-| Environment | Purpose | Configuration Files |
-| :--- | :--- | :--- |
-| **Oracle Cloud Infrastructure (OCI)** | Self-hosted production VM with Nginx reverse proxy and SSL termination. | `ORACLE_DEPLOYMENT.md`, `deploy/nginx/afterclass.conf`, `ecosystem.config.cjs` |
-| **Railway** | Cloud container deployment for Node.js API and Redis. | `railway.toml`, `Dockerfile` |
-| **Vercel** | Edge CDN deployment for compiled static assets (`dist/`). | `vercel.json` |
-| **Supabase** | Managed PostgreSQL with transaction-mode connection pooler (`pgbouncer=true`). | `DATABASE_URL`, `DIRECT_URL` in `.env` |
-| **Upstash Redis** | Serverless in-memory cache for OTP codes, rate limits, and live presence. | `REDIS_URL` in `.env` |
-
-### Production Health Check
-The deployment exposes a zero-dependency health check endpoint:
-```bash
-curl https://your-domain.com/api/health
+```sh
+node --env-file=/private/monitor.env scripts/health-probe.cjs --dry-run
+node --env-file=/private/monitor.env scripts/health-probe.cjs --test-alert
+node --env-file=/private/monitor.env scripts/health-probe.cjs
 ```
-Returns:
-```json
-{ "ok": true, "service": "afterclass", "database": "connected" }
+
+The state file deduplicates failure alerts, reminds after six hours, and sends one recovery notice after a reported outage. A test only confirms provider acceptance. Configure a scheduler at a suitable interval, protect the state/env files on a filesystem that enforces private permissions, and alert on failure of the monitor itself. No independent host or scheduler has been provisioned by this change. No keep-alive service is promised.
+
+## Encrypted recovery drill
+
+`scripts/recovery.cjs` uses Docker's PostgreSQL 17 tools by default (set `BACKUP_POSTGRES_IMAGE=postgres:16-alpine` for a PostgreSQL 16-only drill) and AES-256-GCM authenticated encryption. Use a direct/session-pooler URL in `BACKUP_DATABASE_URL`, not the transaction pooler. Supply a random 32-byte hexadecimal `BACKUP_ENCRYPTION_KEY` from a private env file. Keep a separate recoverable copy of that key; losing it makes the backup unusable.
+
+```sh
+node --env-file=/private/recovery.env scripts/recovery.cjs backup /private/backups/afterclass.acb
+node --env-file=/private/recovery.env scripts/recovery.cjs drill /private/backups/afterclass.acb
 ```
+
+Backup streams through encryption before reaching disk. Drill authenticates and decrypts to a private temporary directory, restores into a disposable Docker database with no network access, checks core table counts, saves an adjacent private `.drill.json`, then removes the container and plaintext. It never accepts a restore-target URL. Failed operations exit nonzero and must be investigated; do not overwrite a previous backup to retry.
+
+This is a database/row-count check. Supabase roles/extensions may require a compatible recovery environment. Test permissions, login, staff grants, evidence uploads and application workflows separately. The script does not back up uploaded files, provider configuration or role definitions. Set retention, encrypted off-site storage, recovery time and acceptable data-loss objectives before launch. A successful demo restore does not prove production recovery.
+
+## Remaining release gates
+
+- A reachable production TLS Redis endpoint and separate production secrets.
+- Public HTTPS deployment, independent scheduled monitoring, and confirmed on-call inbox delivery.
+- A production-representative restore, private-upload recovery, and off-site key/backup custody.
+- Named safety coverage, consenting campus hosts, public meeting venues and student feedback sessions.
+- Independent age assurance and safety operations before production dating is enabled.
+
+See `../DEPLOYMENT_TODO.md` and `../ADMIN_ANALYTICS.md` for rollout and staff procedures.

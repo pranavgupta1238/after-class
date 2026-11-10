@@ -47,7 +47,7 @@ Store these in provider dashboards only—never in Git, issues, chat, screenshot
 - [ ] `REDIS_URL`: Upstash Redis TLS connection string.
 - [ ] `RESEND_API_KEY`: restricted Resend API key.
 - [ ] `RESEND_FROM`: verified Resend sender address.
-- [ ] `HEALTH_SECRET`: secret for the protected Supabase keep-alive endpoint.
+- [ ] `HEALTH_SECRET`: secret for the protected dependency health endpoint.
 - [ ] `CLIENT_URL`: exact production frontend URL.
 - [ ] `NODE_ENV=production`.
 
@@ -87,13 +87,13 @@ Store these in provider dashboards only—never in Git, issues, chat, screenshot
 - [x] Add disciplinary actions (timeouts, suspensions, formal warning emails via Resend).
 - [x] Enforce self-lockout prevention and minimum owner requirement.
 
-## Stage 9 — Web Push Notifications & Launch Readiness (completed)
+## Stage 9 — Web Push & operations tooling (implemented; launch gates open)
 
-- [x] Build native browser push notifications engine with permission request flows.
-- [x] Implement zero-latency Web Audio chime sound effects synthesizer.
+- [x] Add opt-in background Web Push, durable delivery queue, quiet hours and device removal.
+- [x] Add in-app Web Audio chimes.
 - [x] Configure mobile Progressive Web App (PWA) manifest and touch icons.
 - [x] Provide branded loading and retry states for page reloads.
-- [x] Configure Oracle Cloud VM, Nginx, PM2, and multi-cloud deployment scripts.
+- [x] Provide VM, Nginx and PM2 deployment templates; a public deployment is still required.
 
 ## Before public student launch
 
@@ -118,3 +118,5 @@ Store these in provider dashboards only—never in Git, issues, chat, screenshot
 - [ ] Have an independent security review before broad public rollout. Passing automated checks is not a penetration test.
 
 See `docs/ADMIN_ANALYTICS.md` for staff onboarding, incident handling and recovery procedures. The new controls use the existing database/Redis services; free-tier quotas still need monitoring. No paid vendor was enabled.
+
+Notification, independent alert-runner and encrypted recovery commands: [Stage 9 operations guide](stage-9/README.md). Local Redis recovery is not a production Upstash repair.
