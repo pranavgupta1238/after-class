@@ -1969,8 +1969,13 @@ async function runEphemeralChatCleanup() {
 
 // ── Static frontend ─────────────────────────────────────────────────────────
 const staticDir = path.resolve(__dirname, '..', process.env.STATIC_DIR || 'dist');
-app.use(express.static(staticDir));
-app.get('*', (req, res) => res.sendFile(path.join(staticDir, 'index.html')));
+app.use(express.static(staticDir, { setHeaders(res, filePath) {
+  if (filePath.endsWith('/index.html') || filePath.endsWith('/sw.js')) res.setHeader('Cache-Control', 'no-store');
+} }));
+app.get('*', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(staticDir, 'index.html'));
+});
 
 // Run ephemeral cleanup on startup and hourly
 setInterval(runEphemeralChatCleanup, 60 * 60 * 1000);

@@ -26,7 +26,7 @@ import { playSendSound, playReceiveSound } from './audio.js';
 import { launchConfetti } from './confetti.js';
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(() => {}));
 }
 
 // Reuse the initial HTML so loading stays identical before and after JavaScript.
